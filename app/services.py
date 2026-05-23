@@ -1,9 +1,18 @@
 import httpx
 from app.models import Job
+from app.cache import make_cache_key, get_cached, set_cached
 
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
 
 async def fetch_jobs_from_remotive(search: str = None) -> list[Job]:
+    cache_key = make_cache_key("jobs", search=search)
+    
+    cached = get_cached(cache_key)
+    if cached:
+        print(f"CACHE HIT: {cache_key}")
+        return [Job(**job) for job in cached]
+    
+    print(f"CACHE MISS: {cache_key}")
     params = {"limit": 20}
     if search:
         params["search"] = search
@@ -26,4 +35,5 @@ async def fetch_jobs_from_remotive(search: str = None) -> list[Job]:
         )
         jobs.append(job)
 
+    set_cached(cache_key, [job.dict() for job in jobs])
     return jobs
