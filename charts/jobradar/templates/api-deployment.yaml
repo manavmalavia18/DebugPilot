@@ -15,7 +15,7 @@ spec:
       containers:
         - name: jobradar-api
           image: {{ .Values.api.image }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.api.imagePullPolicy }}
           ports:
             - containerPort: {{ .Values.api.port }}
           env:
@@ -31,7 +31,7 @@ metadata:
 spec:
   selector:
     app: jobradar-api
-  type: NodePort
+  type: {{ .Values.api.serviceType }}
   ports:
     - port: {{ .Values.api.port }}
       targetPort: {{ .Values.api.port }}

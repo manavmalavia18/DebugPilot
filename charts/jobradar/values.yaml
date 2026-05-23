@@ -3,6 +3,8 @@ api:
   replicas: 3
   port: 8000
   nodePort: 30080
+  imagePullPolicy: Always
+  serviceType: LoadBalancer
 
 redis:
   image: redis:alpine
