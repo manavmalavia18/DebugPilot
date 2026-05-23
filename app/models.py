@@ -1,8 +1,7 @@
-from pydantic import BaseModel
+from sqlmodel import SQLModel, Field
 from typing import Optional
 
-class Job(BaseModel):
-    id: int
+class JobBase(SQLModel):
     title: str
     company: str
     location: str
@@ -10,3 +9,9 @@ class Job(BaseModel):
     salary_max: Optional[int] = None
     description: str
     url: str
+
+class Job(JobBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+class JobRead(JobBase):
+    id: int
