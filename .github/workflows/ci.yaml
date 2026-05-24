@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -44,6 +47,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -80,6 +85,15 @@ jobs:
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ github.sha }}
             us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:latest
             us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ github.sha }}
+
+      - name: Update image tag in values.yaml
+        run: |
+          sed -i "s|image:.*jobradar-api.*|image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ github.sha }}|" charts/jobradar/values.yaml
+          git config user.email "ci@jobradar.com"
+          git config user.name "CI Bot"
+          git add charts/jobradar/values.yaml
+          git commit -m "ci: update image tag to ${{ github.sha }}"
+          git push
 
       - name: Output image tags
         run: |
