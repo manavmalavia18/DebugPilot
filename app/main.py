@@ -144,7 +144,7 @@ def get_task_status(task_id: str):
 
 
 
-@app.get("/metrics")
+@app.get("/health-stats")
 def metrics(session: Session = Depends(get_session)):
     jobs = session.exec(select(Job)).all()
     uptime = round(time.time() - start_time, 2)
