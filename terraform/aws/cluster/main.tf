@@ -1,9 +1,24 @@
 terraform {
   required_providers {
-    aws    = { source = "hashicorp/aws", version = "~> 5.0" }
-    helm   = { source = "hashicorp/helm", version = "~> 2.0" }
-    argocd = { source = "oboukili/argocd", version = "~> 6.0" }
-    null   = { source = "hashicorp/null", version = "~> 3.0" }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.0"
+    }
+
+    argocd = {
+      source  = "oboukili/argocd"
+      version = "~> 6.0"
+    }
+
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -41,15 +56,17 @@ module "eks" {
   node_count_max     = var.node_count_max
 }
 
-module "ecr" {
-  source       = "./modules/ecr"
-  project_name = var.project_name
+# ECR is managed by terraform/aws/bootstrap.
+# Do not create it again here.
+data "aws_ecr_repository" "api" {
+  name = "${var.project_name}-api"
 }
 
 resource "null_resource" "kubeconfig" {
   provisioner "local-exec" {
     command = "aws eks update-kubeconfig --name ${var.project_name} --region ${var.aws_region}"
   }
+
   depends_on = [module.eks]
 }
 
@@ -81,14 +98,8 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
   timeout          = 300
-  depends_on       = [null_resource.kubeconfig]
-}
 
-resource "null_resource" "argocd_portforward" {
-  provisioner "local-exec" {
-    command = "kubectl port-forward svc/argocd-server -n argocd 8080:443 > /tmp/argocd-pf.log 2>&1 & echo $! > /tmp/argocd-pf.pid && sleep 15"
-  }
-  depends_on = [helm_release.argocd]
+  depends_on = [null_resource.kubeconfig]
 }
 
 resource "argocd_application" "jobradar" {
@@ -117,5 +128,5 @@ resource "argocd_application" "jobradar" {
     }
   }
 
-  depends_on = [null_resource.argocd_portforward]
+  depends_on = [helm_release.argocd]
 }
