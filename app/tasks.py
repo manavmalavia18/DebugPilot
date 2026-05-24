@@ -1,7 +1,6 @@
 from app.celery_app import celery_app
 from app.services import fetch_jobs_from_remotive
 from app.database import get_session
-from app.models import Job
 import asyncio
 
 @celery_app.task(bind=True)
