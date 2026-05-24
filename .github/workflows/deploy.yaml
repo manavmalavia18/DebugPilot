@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      cloud:
+        description: "Which cloud to deploy to"
+        required: true
+        type: choice
+        options:
+          - aws
+          - gcp
+          - both
+      image_tag:
+        description: "Image tag to deploy (default: latest)"
+        required: false
+        default: "latest"
+
+jobs:
+  deploy-aws:
+    if: inputs.cloud == 'aws' || inputs.cloud == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Install Helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name jobradar \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to EKS
+        run: |
+          helm upgrade --install jobradar ./charts/jobradar \
+            --set api.image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ inputs.image_tag }} \
+            --set api.replicas=1
+          kubectl rollout status deployment/jobradar-api --timeout=120s
+
+      - name: Show live URL
+        run: kubectl get services jobradar-api
+
+  deploy-gcp:
+    if: inputs.cloud == 'gcp' || inputs.cloud == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Install Helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Configure kubectl for GKE
+        run: |
+          gcloud container clusters get-credentials jobradar \
+            --region=${{ secrets.GCP_REGION }}
+
+      - name: Deploy to GKE
+        run: |
+          helm upgrade --install jobradar ./charts/jobradar \
+            --set api.image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ inputs.image_tag }} \
+            --set api.replicas=1
+          kubectl rollout status deployment/jobradar-api --timeout=120s
+
+      - name: Show live URL
+        run: kubectl get services jobradar-api
