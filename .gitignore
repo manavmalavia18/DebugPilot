@@ -221,3 +221,15 @@ __marimo__/
 Jobradar_accessKeys.csv
 *.csv
 brew
+terraform/*.tfvars
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+
+# Terraform
+terraform/**/.terraform/
+terraform/**/terraform.tfstate
+terraform/**/terraform.tfstate.backup
+terraform/**/terraform.tfstate.*.backup
+terraform/**/.terraform.lock.hcl
+terraform/**/terraform.tfvars
