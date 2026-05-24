@@ -21,7 +21,6 @@ jobs:
         working-directory: terraform/aws/cluster
 
     env:
-      TF_VAR_argocd_password: ${{ secrets.ARGOCD_PASSWORD }}
       TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
@@ -36,6 +35,15 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name jobradar
+
+      - name: Verify Kubernetes access
+        run: kubectl get nodes
 
       - name: Terraform Init
         run: terraform init
