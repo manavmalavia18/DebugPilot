@@ -36,3 +36,17 @@ spec:
     - port: {{ .Values.api.port }}
       targetPort: {{ .Values.api.port }}
       nodePort: {{ .Values.api.nodePort }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobradar-api
+spec:
+  selector:
+    app: jobradar-api
+  type: {{ .Values.api.serviceType }}
+  ports:
+    - name: http
+      port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}
+      nodePort: {{ .Values.api.nodePort }}
