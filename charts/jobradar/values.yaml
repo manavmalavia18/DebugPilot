@@ -1,6 +1,6 @@
 api:
   image: jobradar-api:latest
-  replicas: 2
+  replicas: 1
   port: 8000
   nodePort: 30080
   imagePullPolicy: Always
