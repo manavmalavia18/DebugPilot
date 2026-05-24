@@ -1,5 +1,7 @@
 #!/bin/bash
 set -e
+# always run from project root
+cd "$(dirname "$0")/.."
 
 echo "🚀 JobRadar deployment"
 echo ""

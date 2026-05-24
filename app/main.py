@@ -15,6 +15,7 @@ from anthropic import Anthropic
 import time
 from app.logging_config import logger
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 start_time = time.time()
 load_dotenv()
 
@@ -33,6 +34,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+Instrumentator().instrument(app).expose(app)
 
 @app.get("/")
 def root():
