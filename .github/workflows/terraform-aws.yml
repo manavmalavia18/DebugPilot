@@ -15,9 +15,14 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: terraform/aws/cluster
+
+    env:
+      TF_VAR_argocd_password: ${{ secrets.ARGOCD_PASSWORD }}
+      TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -37,12 +42,12 @@ jobs:
 
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
-        run: terraform plan -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform plan -input=false
 
       - name: Terraform Apply
         if: inputs.action == 'apply'
-        run: terraform apply -auto-approve -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform apply -auto-approve -input=false
 
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
-        run: terraform destroy -auto-approve -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform destroy -auto-approve -input=false
