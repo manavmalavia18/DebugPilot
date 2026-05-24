@@ -23,20 +23,14 @@ spec:
               value: "redis"
             - name: REDIS_PORT
               value: "{{ .Values.redis.port }}"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: jobradar-api
-spec:
-  selector:
-    app: jobradar-api
-  type: {{ .Values.api.serviceType }}
-  ports:
-    - port: {{ .Values.api.port }}
-      targetPort: {{ .Values.api.port }}
-      nodePort: {{ .Values.api.nodePort }}
-
 apiVersion: v1
 kind: Service
 metadata:
