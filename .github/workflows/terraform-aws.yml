@@ -40,10 +40,6 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Import existing ECR repo
-        if: inputs.action == 'plan' || inputs.action == 'apply'
-        run: terraform import module.ecr.aws_ecr_repository.api jobradar-api || true
-
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
         run: terraform plan -input=false

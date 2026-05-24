@@ -10,11 +10,6 @@ terraform {
       version = "~> 2.0"
     }
 
-    argocd = {
-      source  = "oboukili/argocd"
-      version = "~> 6.0"
-    }
-
     null = {
       source  = "hashicorp/null"
       version = "~> 3.0"
@@ -31,13 +26,6 @@ provider "helm" {
     config_path    = "~/.kube/config"
     config_context = "arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/${var.project_name}"
   }
-}
-
-provider "argocd" {
-  server_addr = "localhost:8080"
-  username    = "admin"
-  password    = var.argocd_password
-  insecure    = true
 }
 
 module "vpc" {
@@ -102,30 +90,35 @@ resource "helm_release" "argocd" {
   depends_on = [null_resource.kubeconfig]
 }
 
-resource "argocd_application" "jobradar" {
-  metadata {
-    name      = "jobradar"
-    namespace = "argocd"
+resource "null_resource" "argocd_application" {
+  provisioner "local-exec" {
+    command = <<EOT
+kubectl apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jobradar
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/manavmalavia18/JobTracker
+    targetRevision: HEAD
+    path: charts/jobradar
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF
+EOT
   }
 
-  spec {
-    source {
-      repo_url        = "https://github.com/manavmalavia18/JobTracker"
-      path            = "charts/jobradar"
-      target_revision = "HEAD"
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "default"
-    }
-
-    sync_policy {
-      automated {
-        prune     = true
-        self_heal = true
-      }
-    }
+  provisioner "local-exec" {
+    when    = destroy
+    command = "kubectl delete application jobradar -n argocd --ignore-not-found=true"
   }
 
   depends_on = [helm_release.argocd]

@@ -43,7 +43,3 @@ variable "grafana_password" {
   default   = "jobradar123"
 }
 
-variable "argocd_password" {
-  type      = string
-  sensitive = true
-}
