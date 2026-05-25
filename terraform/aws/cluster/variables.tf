@@ -43,3 +43,13 @@ variable "grafana_password" {
   default   = "jobradar123"
 }
 
+
+variable "cloudflare_api_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "domain_name" {
+  type    = string
+  default = "manavmalavia.org"
+}
