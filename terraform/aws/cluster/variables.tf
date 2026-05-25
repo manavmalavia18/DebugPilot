@@ -59,3 +59,10 @@ variable "argocd_password" {
   sensitive = true
   default   = "jobradar123"
 }
+
+
+variable "argocd_password_bcrypt" {
+  type      = string
+  sensitive = true
+  default   = "$2a$10$uaWjWzOi.bXRSaEflJkpH.JXqBpVMx.fwucnfPQtBvSJ1MuUJmhI6"
+}
