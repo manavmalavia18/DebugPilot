@@ -4,7 +4,7 @@ api:
   port: 8000
   nodePort: 30080
   imagePullPolicy: Always
-  serviceType: LoadBalancer
+  serviceType: ClusterIP
 
 redis:
   image: redis:alpine
