@@ -118,7 +118,7 @@ resource "helm_release" "monitoring" {
   chart            = "kube-prometheus-stack"
   namespace        = "monitoring"
   create_namespace = true
-  timeout          = 300
+  timeout          = 900
 
   set {
     name  = "grafana.adminPassword"
