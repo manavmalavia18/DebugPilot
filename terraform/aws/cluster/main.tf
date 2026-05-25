@@ -2,9 +2,7 @@ terraform {
   required_providers {
     aws    = { source = "hashicorp/aws", version = "~> 5.0" }
     helm   = { source = "hashicorp/helm", version = "~> 2.0" }
-    argocd = { source = "oboukili/argocd", version = "~> 6.0" }
     null   = { source = "hashicorp/null", version = "~> 3.0" }
-    bcrypt = { source = "viktorradnai/bcrypt", version = "~> 0.1" }
   }
 }
 
@@ -17,13 +15,6 @@ provider "helm" {
     config_path    = "~/.kube/config"
     config_context = "arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/${var.project_name}"
   }
-}
-
-provider "argocd" {
-  server_addr = "jobradar-argocd.manavmalavia.org"
-  username    = "admin"
-  password    = var.argocd_password
-  insecure    = false
 }
 
 module "vpc" {
@@ -52,6 +43,38 @@ resource "null_resource" "kubeconfig" {
     command = "aws eks update-kubeconfig --name ${var.project_name} --region ${var.aws_region}"
   }
   depends_on = [module.eks]
+}
+
+resource "helm_release" "ingress_nginx" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  namespace        = "ingress-nginx"
+  create_namespace = true
+  timeout          = 300
+
+  set {
+    name  = "controller.service.type"
+    value = "LoadBalancer"
+  }
+
+  depends_on = [null_resource.kubeconfig]
+}
+
+resource "helm_release" "cert_manager" {
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
+  namespace        = "cert-manager"
+  create_namespace = true
+  timeout          = 300
+
+  set {
+    name  = "crds.enabled"
+    value = "true"
+  }
+
+  depends_on = [null_resource.kubeconfig]
 }
 
 resource "helm_release" "monitoring" {
@@ -96,9 +119,23 @@ resource "helm_release" "argocd" {
   depends_on = [null_resource.kubeconfig]
 }
 
+resource "null_resource" "ingress_rules" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      sleep 30
+      kubectl apply -f ${path.module}/../../k8s/ingress/cluster-issuer.yaml
+      kubectl apply -f ${path.module}/../../k8s/ingress/jobradar-ingress.yaml
+      kubectl apply -f ${path.module}/../../k8s/ingress/grafana-ingress.yaml
+      kubectl apply -f ${path.module}/../../k8s/ingress/argocd-ingress.yaml
+    EOT
+  }
+  depends_on = [helm_release.cert_manager, helm_release.ingress_nginx]
+}
+
 resource "null_resource" "argocd_app" {
   provisioner "local-exec" {
     command = <<-EOT
+      sleep 15
       kubectl apply -f - <<YAML
       apiVersion: argoproj.io/v1alpha1
       kind: Application
