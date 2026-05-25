@@ -19,6 +19,11 @@ jobs:
       run:
         working-directory: terraform/gcp
 
+    env:
+      TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_gcp_region: ${{ secrets.GCP_REGION }}
+      TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +34,20 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Update kubeconfig if cluster exists
+        run: |
+          if gcloud container clusters describe jobradar \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            gcloud container clusters get-credentials jobradar \
+              --region "${{ secrets.GCP_REGION }}" \
+              --project "${{ secrets.GCP_PROJECT_ID }}"
+          else
+            echo "GKE cluster does not exist yet. Skipping kubeconfig update."
+          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -38,12 +57,12 @@ jobs:
 
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
-        run: terraform plan -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform plan -input=false
 
       - name: Terraform Apply
         if: inputs.action == 'apply'
-        run: terraform apply -auto-approve -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform apply -auto-approve -input=false
 
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
-        run: terraform destroy -auto-approve -var="argocd_password=${{ secrets.ARGOCD_PASSWORD }}"
+        run: terraform destroy -auto-approve -input=false

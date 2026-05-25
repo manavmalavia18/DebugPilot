@@ -285,7 +285,8 @@ JobTracker/
 │   │   ├── bootstrap/    # ECR (always on)
 │   │   └── cluster/      # EKS + full stack
 │   └── gcp/              # GKE + Artifact Registry
-├── k8s/ingress/          # Ingress rules + ClusterIssuer
+├── k8s/ingress/aws/      # AWS ingress + ClusterIssuer
+├── k8s/ingress/gcp/      # GCP ingress + ClusterIssuer
 ├── .github/workflows/
 │   ├── ci.yaml           # Test + build + push
 │   ├── deploy.yaml       # Manual ArgoCD sync

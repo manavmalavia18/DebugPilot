@@ -1,0 +1,10 @@
+api:
+  image: us-central1-docker.pkg.dev/jobradar-497223/jobradar/jobradar-api:latest
+  replicas: 1
+  port: 8000
+  imagePullPolicy: Always
+  serviceType: ClusterIP
+
+redis:
+  image: redis:alpine
+  port: 6379

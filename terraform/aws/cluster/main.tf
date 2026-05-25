@@ -82,7 +82,7 @@ resource "helm_release" "external_dns" {
 
       policy = "upsert-only"
 
-      txtOwnerId = var.project_name
+      txtOwnerId = "jobradar-aws"
 
       env = [
         {
@@ -158,10 +158,10 @@ resource "null_resource" "ingress_rules" {
   provisioner "local-exec" {
     command = <<-EOT
       sleep 30
-      kubectl apply -f ${path.module}/../../../k8s/ingress/cluster-issuer.yaml
-      kubectl apply -f ${path.module}/../../../k8s/ingress/jobradar-ingress.yaml
-      kubectl apply -f ${path.module}/../../../k8s/ingress/grafana-ingress.yaml
-      kubectl apply -f ${path.module}/../../../k8s/ingress/argocd-ingress.yaml
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/cluster-issuer.yaml
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/jobradar-ingress.yaml
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/grafana-ingress.yaml
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/argocd-ingress.yaml
     EOT
   }
   depends_on = [helm_release.cert_manager, helm_release.ingress_nginx]
