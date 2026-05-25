@@ -1,19 +1,10 @@
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.0"
-    }
-
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
-    }
+    aws    = { source = "hashicorp/aws", version = "~> 5.0" }
+    helm   = { source = "hashicorp/helm", version = "~> 2.0" }
+    argocd = { source = "oboukili/argocd", version = "~> 6.0" }
+    null   = { source = "hashicorp/null", version = "~> 3.0" }
+    bcrypt = { source = "viktorradnai/bcrypt", version = "~> 0.1" }
   }
 }
 
@@ -26,6 +17,13 @@ provider "helm" {
     config_path    = "~/.kube/config"
     config_context = "arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/${var.project_name}"
   }
+}
+
+provider "argocd" {
+  server_addr = "jobradar-argocd.manavmalavia.org"
+  username    = "admin"
+  password    = var.argocd_password
+  insecure    = false
 }
 
 module "vpc" {
@@ -44,17 +42,15 @@ module "eks" {
   node_count_max     = var.node_count_max
 }
 
-# ECR is managed by terraform/aws/bootstrap.
-# Do not create it again here.
-data "aws_ecr_repository" "api" {
-  name = "${var.project_name}-api"
+module "ecr" {
+  source       = "./modules/ecr"
+  project_name = var.project_name
 }
 
 resource "null_resource" "kubeconfig" {
   provisioner "local-exec" {
     command = "aws eks update-kubeconfig --name ${var.project_name} --region ${var.aws_region}"
   }
-
   depends_on = [module.eks]
 }
 
@@ -87,39 +83,43 @@ resource "helm_release" "argocd" {
   create_namespace = true
   timeout          = 300
 
+  set {
+    name  = "configs.secret.argocdServerAdminPassword"
+    value = bcrypt(var.argocd_password)
+  }
+
+  set {
+    name  = "configs.secret.argocdServerAdminPasswordMtime"
+    value = "2024-01-01T00:00:00Z"
+  }
+
   depends_on = [null_resource.kubeconfig]
 }
 
-resource "null_resource" "argocd_application" {
+resource "null_resource" "argocd_app" {
   provisioner "local-exec" {
-    command = <<EOT
-kubectl apply -f - <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: jobradar
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/manavmalavia18/JobTracker
-    targetRevision: HEAD
-    path: charts/jobradar
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-EOF
-EOT
+    command = <<-EOT
+      kubectl apply -f - <<YAML
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: jobradar
+        namespace: argocd
+      spec:
+        project: default
+        source:
+          repoURL: https://github.com/manavmalavia18/JobTracker
+          targetRevision: HEAD
+          path: charts/jobradar
+        destination:
+          server: https://kubernetes.default.svc
+          namespace: default
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+      YAML
+    EOT
   }
-
-  provisioner "local-exec" {
-    when    = destroy
-    command = "kubectl delete application jobradar -n argocd --ignore-not-found=true"
-  }
-
   depends_on = [helm_release.argocd]
 }
