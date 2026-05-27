@@ -14,7 +14,7 @@ variable "project_name" {
 
 variable "machine_type" {
   type    = string
-  default = "e2-small"
+  default = "e2-medium"
 }
 
 variable "node_count" {
