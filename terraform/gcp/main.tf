@@ -88,6 +88,9 @@ resource "helm_release" "external_dns" {
 
       txtOwnerId = "jobradar-gcp"
 
+      livenessProbe  = null
+      readinessProbe = null
+
       env = [
         {
           name  = "CF_API_TOKEN"
