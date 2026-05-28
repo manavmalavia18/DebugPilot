@@ -3,4 +3,8 @@ resource "google_artifact_registry_repository" "api" {
   repository_id = var.project_name
   format        = "DOCKER"
   labels        = { project = var.project_name }
+  lifecycle {
+    prevent_destroy = true
+  }
+
 }
