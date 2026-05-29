@@ -1,4 +1,4 @@
-name: Terraform GCP
+name: Terraform GCP Cluster
 
 on:
   workflow_dispatch:
@@ -62,6 +62,24 @@ jobs:
       - name: Terraform Apply
         if: inputs.action == 'apply'
         run: terraform apply -auto-approve -input=false
+
+      - name: Cleanup GCP ingress DNS before destroy
+        if: inputs.action == 'destroy'
+        run: |
+          if kubectl get ns >/dev/null 2>&1; then
+            echo "Deleting GCP ingress resources so ExternalDNS can remove Cloudflare records..."
+
+            kubectl delete -f ../../k8s/ingress/gcp/jobradar-ingress.yaml --ignore-not-found || true
+            kubectl delete -f ../../k8s/ingress/gcp/grafana-ingress.yaml --ignore-not-found || true
+            kubectl delete -f ../../k8s/ingress/gcp/argocd-ingress.yaml --ignore-not-found || true
+
+            echo "Waiting for ExternalDNS sync..."
+            sleep 90
+
+            kubectl logs -n external-dns deploy/external-dns --tail=100 || true
+          else
+            echo "Cluster not reachable. Skipping ingress DNS cleanup."
+          fi
 
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
