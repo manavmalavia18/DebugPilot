@@ -4,7 +4,5 @@ api:
   port: 8000
   imagePullPolicy: Always
   serviceType: ClusterIP
-
-redis:
-  image: redis:alpine
-  port: 6379
+  anthropicSecretName: debugpilot-secrets
+  anthropicSecretKey: ANTHROPIC_API_KEY

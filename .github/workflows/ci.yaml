@@ -21,8 +21,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
         run: pip install -r requirements.txt
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
 
       - name: Run tests
         run: pytest tests/ -v
@@ -39,11 +51,26 @@ jobs:
       - name: Install ruff
         run: pip install ruff
 
-      - name: Lint
-        run: ruff check app/
+      - name: Lint Python
+        run: ruff check app/ tests/
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Validate Helm chart
+        run: |
+          helm lint ./charts/jobradar
+          helm template debugpilot ./charts/jobradar \
+            --set api.image=example.com/debugpilot-api:test \
+            > /dev/null
 
   build-and-push:
-    needs: [test, lint]
+    needs: [test, lint, helm]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
@@ -81,6 +108,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -93,7 +121,7 @@ jobs:
         run: |
           sed -i "s|image:.*jobradar-api.*|image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ github.sha }}|" charts/jobradar/values.yaml
 
-          git config user.email "ci@jobradar.com"
+          git config user.email "ci@debugpilot.dev"
           git config user.name "CI Bot"
 
           git add charts/jobradar/values.yaml

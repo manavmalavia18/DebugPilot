@@ -1,26 +1,20 @@
-from fastapi import FastAPI, Depends
-from app.services import fetch_jobs_from_remotive
-from sqlmodel import Session, select
-from app.models import Job, JobRead
-from app.database import create_db_and_tables, get_session
-from typing import List
-from app.ai import score_job, generate_cover_letter
+import json
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
-from dotenv import load_dotenv
-from app.celery_app import celery_app
-from app.tasks import fetch_jobs_task
-import os
-from anthropic import Anthropic
-import time
-from app.logging_config import logger
+from pathlib import Path
+from typing import List
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
-start_time = time.time()
-load_dotenv()
+from sqlmodel import Session, select
 
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+from app.analyzer import analyze_log
+from app.database import create_db_and_tables, get_session
+from app.models import AnalyzeRequest, AnalysisResult, SavedIncident, SavedIncidentRead
 
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -28,138 +22,105 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     yield
 
+
 app = FastAPI(
-    title="JobRadar",
-    description="AI-powered job intelligence system",
+    title="DebugPilot",
+    description="AI-powered DevOps incident debugger",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 Instrumentator().instrument(app).expose(app)
 
-@app.get("/")
-def root():
-    return {"message": "JobRadar is alive"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-@app.get("/jobs", response_model=List[JobRead])
-def get_jobs(
-    title: str = None,
-    location: str = None,
-    session: Session = Depends(get_session)
-):
-    query = select(Job)
-    if title:
-        query = query.where(Job.title.contains(title))
-    if location:
-        query = query.where(Job.location.contains(location))
-    return session.exec(query).all()
-
-@app.post("/jobs", response_model=JobRead)
-def create_job(job: Job, session: Session = Depends(get_session)):
-    session.add(job)
-    session.commit()
-    session.refresh(job)
-    return job
-
-@app.get("/jobs/fetch", response_model=List[JobRead])
-async def fetch_and_store_jobs(
-    search: str = None,
-    session: Session = Depends(get_session)
-):
-    jobs = await fetch_jobs_from_remotive(search)
-    for job in jobs:
-        session.add(job)
-    session.commit()
-    return jobs
-
-class CVMatchRequest(BaseModel):
-    cv_text: str
-    limit: int = 10
-
-class CoverLetterRequest(BaseModel):
-    cv_text: str
-
-@app.post("/match")
-def match_jobs(request: CVMatchRequest, session: Session = Depends(get_session)):
-    query = select(Job).limit(request.limit)
-    jobs = session.exec(query).all()
-    
-    results = []
-    for job in jobs:
-        score = score_job(
-            cv_text=request.cv_text,
-            job_title=job.title,
-            job_description=job.description
-        )
-        results.append({
-            "job": job,
-            "score": score["score"],
-            "reason": score["reason"],
-            "missing": score["missing"]
-        })
-    
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
-
-@app.post("/cover-letter/{job_id}")
-def cover_letter(
-    job_id: int,
-    request: CoverLetterRequest,
-    session: Session = Depends(get_session)
-):
-    job = session.get(Job, job_id)
-    if not job:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    letter = generate_cover_letter(
-        cv_text=request.cv_text,
-        job_title=job.title,
-        company=job.company,
-        job_description=job.description
-    )
-    return {"cover_letter": letter, "job": job}
-
-
-@app.post("/jobs/fetch-async")
-def fetch_jobs_async(search: str = None):
-    task = fetch_jobs_task.delay(search=search)
-    return {
-        "task_id": task.id,
-        "status": "queued",
-        "message": f"Fetching jobs in background. Poll /tasks/{task.id} for status"
-    }
-
-@app.get("/tasks/{task_id}")
-def get_task_status(task_id: str):
-    task = celery_app.AsyncResult(task_id)
-    return {
-        "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.ready() else None
-    }
-
-
-
-@app.get("/health-stats")
-def metrics(session: Session = Depends(get_session)):
-    jobs = session.exec(select(Job)).all()
-    uptime = round(time.time() - start_time, 2)
-    logger.info("metrics endpoint hit")
-    return {
-        "uptime_seconds": uptime,
-        "total_jobs": len(jobs),
-        "status": "healthy"
-    }
-
-
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+def root():
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return {
+        "service": "debugpilot",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+        "ui": "http://localhost:5173",
+    }
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "debugpilot"}
+
+
+@app.post("/analyze", response_model=AnalysisResult)
+def analyze(request: AnalyzeRequest, session: Session = Depends(get_session)):
+    try:
+        result = analyze_log(request.log_text, request.source_hint)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+
+    if request.save:
+        saved = SavedIncident(
+            log_text=request.log_text[:8000],
+            category=result.category,
+            symptom=result.symptom,
+            root_cause=result.root_cause,
+            likely_fix=result.likely_fix,
+            confidence=result.confidence,
+            response_json=json.dumps(result.model_dump()),
+        )
+        session.add(saved)
+        session.commit()
+
+    return result
+
+
+@app.get("/incidents", response_model=List[SavedIncidentRead])
+def list_incidents(
+    limit: int = 20,
+    session: Session = Depends(get_session),
+):
+    query = select(SavedIncident).order_by(SavedIncident.created_at.desc()).limit(limit)
+    rows = session.exec(query).all()
+    return [
+        SavedIncidentRead(
+            id=row.id,
+            created_at=row.created_at,
+            category=row.category,
+            symptom=row.symptom,
+            root_cause=row.root_cause,
+            likely_fix=row.likely_fix,
+            confidence=row.confidence,
+        )
+        for row in rows
+    ]
+
+
+@app.get("/incidents/{incident_id}", response_model=AnalysisResult)
+def get_incident(incident_id: int, session: Session = Depends(get_session)):
+    row = session.get(SavedIncident, incident_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return AnalysisResult(**json.loads(row.response_json))
+
+
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_frontend(full_path: str):
+        if full_path.startswith(
+            ("analyze", "incidents", "health", "metrics", "docs", "openapi.json", "redoc")
+        ):
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(FRONTEND_DIST / "index.html")
