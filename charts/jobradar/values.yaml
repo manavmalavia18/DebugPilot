@@ -1,5 +1,5 @@
 api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/jobradar-api:b399ab5d8a78556a799f9f6c083fcb3a6802bff5
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/jobradar-api:e45d0b3e924a771a03dcd7117794e7189b4f5220
   replicas: 1
   port: 8000
   nodePort: 30080
