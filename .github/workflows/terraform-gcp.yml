@@ -65,13 +65,14 @@ jobs:
 
       - name: Cleanup GCP ingress DNS before destroy
         if: inputs.action == 'destroy'
+        working-directory: ${{ github.workspace }}
         run: |
           if kubectl get ns >/dev/null 2>&1; then
             echo "Deleting GCP ingress resources so ExternalDNS can remove Cloudflare records..."
 
-            kubectl delete -f ../../k8s/ingress/gcp/jobradar-ingress.yaml --ignore-not-found || true
-            kubectl delete -f ../../k8s/ingress/gcp/grafana-ingress.yaml --ignore-not-found || true
-            kubectl delete -f ../../k8s/ingress/gcp/argocd-ingress.yaml --ignore-not-found || true
+            kubectl delete -f k8s/ingress/gcp/jobradar-ingress.yaml --ignore-not-found || true
+            kubectl delete -f k8s/ingress/gcp/grafana-ingress.yaml --ignore-not-found || true
+            kubectl delete -f k8s/ingress/gcp/argocd-ingress.yaml --ignore-not-found || true
 
             echo "Waiting for ExternalDNS sync..."
             sleep 90
