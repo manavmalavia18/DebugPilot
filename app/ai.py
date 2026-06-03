@@ -2,11 +2,10 @@ import json
 import os
 import re
 
+from anthropic import Anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
-
-from anthropic import Anthropic
 
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
