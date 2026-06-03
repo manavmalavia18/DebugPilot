@@ -90,6 +90,15 @@ Multi-cloud Kubernetes deployment with Terraform, Helm, ArgoCD, Prometheus, and 
 - Syncs `ANTHROPIC_API_KEY` from GitHub secrets → `debugpilot-secrets` in cluster
 - Helm upgrade with built image (UI served from pod at `/`)
 
+**Cluster lifecycle (AWS/GCP):**
+- **Destroy** — workflow deletes Ingress resources first so external-dns removes Cloudflare CNAMEs before the cluster is torn down
+- **Apply** — after apply, confirm DNS matches the new load balancer:
+  ```bash
+  kubectl get ingress jobradar-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+  dig jobradar.manavmalavia.org CNAME +short
+  ```
+  See `app/incidents/external-dns-stale-cname.md` if they differ.
+
 ```
 terraform/          AWS EKS + GCP GKE
 charts/jobradar/    Helm chart (API deployment)
