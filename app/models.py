@@ -1,17 +1,51 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
+from datetime import datetime
+from typing import Literal, Optional
 
-class JobBase(SQLModel):
-    title: str
-    company: str
-    location: str
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    description: str
-    url: str
+from pydantic import BaseModel, Field
+from sqlmodel import Field as SQLField, SQLModel
 
-class Job(JobBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+SourceCategory = Literal[
+    "kubernetes", "terraform", "github_actions", "docker", "app", "unknown"
+]
+ConfidenceLevel = Literal["high", "medium", "low"]
 
-class JobRead(JobBase):
+
+class AnalyzeRequest(BaseModel):
+    log_text: str = Field(min_length=1)
+    source_hint: Optional[SourceCategory] = None
+    save: bool = True
+
+
+class AnalysisResult(BaseModel):
+    category: SourceCategory
+    symptom: str
+    what_failed: str
+    root_cause: str
+    confidence: ConfidenceLevel
+    debug_commands: list[str]
+    likely_fix: str
+    prevention: list[str]
+    similar_incidents: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SavedIncident(SQLModel, table=True):
+    id: Optional[int] = SQLField(default=None, primary_key=True)
+    created_at: datetime = SQLField(default_factory=datetime.utcnow)
+    log_text: str
+    category: str
+    symptom: str
+    root_cause: str
+    likely_fix: str
+    confidence: str
+    response_json: str
+
+
+class SavedIncidentRead(BaseModel):
     id: int
+    created_at: datetime
+    category: str
+    symptom: str
+    root_cause: str
+    likely_fix: str
+    confidence: str

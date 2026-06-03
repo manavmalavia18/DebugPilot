@@ -19,10 +19,11 @@ spec:
           ports:
             - containerPort: {{ .Values.api.port }}
           env:
-            - name: REDIS_HOST
-              value: "redis"
-            - name: REDIS_PORT
-              value: "{{ .Values.redis.port }}"
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.anthropicSecretName }}
+                  key: {{ .Values.api.anthropicSecretKey }}
           resources:
             requests:
               cpu: 100m

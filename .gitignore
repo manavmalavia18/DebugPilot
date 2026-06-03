@@ -220,6 +220,8 @@ __marimo__/
 .streamlit/secrets.toml
 Jobradar_accessKeys.csv
 *.csv
+debugpilot.db
+jobradar.db
 brew
 terraform/*.tfvars
 terraform/.terraform/

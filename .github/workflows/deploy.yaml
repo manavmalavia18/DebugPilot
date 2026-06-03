@@ -44,6 +44,18 @@ jobs:
             --name jobradar \
             --region ${{ secrets.AWS_REGION }}
 
+      - name: Sync Anthropic API secret
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "Missing ANTHROPIC_API_KEY GitHub secret — required for DebugPilot analyze endpoint."
+            exit 1
+          fi
+          kubectl create secret generic debugpilot-secrets \
+            --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Resolve image tag
         id: resolve_tag_aws
         run: |
@@ -66,10 +78,13 @@ jobs:
           helm upgrade --install jobradar ./charts/jobradar \
             --set api.image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ steps.resolve_tag_aws.outputs.image_tag }} \
             --set api.replicas=1
-          kubectl rollout status deployment/jobradar-api --timeout=120s
+          kubectl rollout status deployment/jobradar-api --timeout=180s
+          kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
 
-      - name: Show live URL
-        run: kubectl get services jobradar-api
+      - name: Verify deployment
+        run: |
+          kubectl get deployment jobradar-api
+          kubectl get pods -l app=jobradar-api
 
   deploy-gcp:
     if: inputs.cloud == 'gcp' || inputs.cloud == 'both'
@@ -100,6 +115,18 @@ jobs:
           gcloud container clusters get-credentials jobradar \
             --region=${{ secrets.GCP_REGION }}
 
+      - name: Sync Anthropic API secret
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "Missing ANTHROPIC_API_KEY GitHub secret — required for DebugPilot analyze endpoint."
+            exit 1
+          fi
+          kubectl create secret generic debugpilot-secrets \
+            --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Resolve image tag
         id: resolve_tag_gcp
         run: |
@@ -109,7 +136,7 @@ jobs:
               --sort-by=~UPDATE_TIME \
               --limit=1 \
               --format='value(tags)' | head -1)
-            echo "Using latest GCR tag: $IMAGE_TAG"
+            echo "Using latest GAR tag: $IMAGE_TAG"
           else
             IMAGE_TAG="${{ inputs.image_tag }}"
             echo "Using provided tag: $IMAGE_TAG"
@@ -120,9 +147,13 @@ jobs:
         run: |
           echo "Deploying image tag: ${{ steps.resolve_tag_gcp.outputs.image_tag }}"
           helm upgrade --install jobradar ./charts/jobradar \
+            -f charts/jobradar/values-gcp.yaml \
             --set api.image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ steps.resolve_tag_gcp.outputs.image_tag }} \
             --set api.replicas=1
-          kubectl rollout status deployment/jobradar-api --timeout=120s
+          kubectl rollout status deployment/jobradar-api --timeout=180s
+          kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
 
-      - name: Show live URL
-        run: kubectl get services jobradar-api
+      - name: Verify deployment
+        run: |
+          kubectl get deployment jobradar-api
+          kubectl get pods -l app=jobradar-api
