@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
 SYSTEM_PROMPT = """You are DebugPilot, a senior DevOps engineer helping debug infrastructure issues.
 
