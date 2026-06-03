@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
 import axios from "axios"
+import { API_BASE } from "./api"
 import AnalyzePanel from "./components/AnalyzePanel"
 import HistoryPanel from "./components/HistoryPanel"
 import KpiCards from "./components/KpiCards"
 import Sidebar from "./components/Sidebar"
 import TopBar from "./components/TopBar"
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 export default function App() {
   const [view, setView] = useState("analyze")
@@ -20,7 +19,7 @@ export default function App() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/incidents`)
+      const res = await axios.get(`${API_BASE}/incidents`)
       setHistory(res.data)
     } catch {
       setHistory([])
@@ -29,7 +28,7 @@ export default function App() {
 
   const checkHealth = useCallback(async () => {
     try {
-      await axios.get(`${API}/health`, { timeout: 3000 })
+      await axios.get(`${API_BASE}/health`, { timeout: 3000 })
       setApiOnline(true)
     } catch {
       setApiOnline(false)
@@ -48,7 +47,7 @@ export default function App() {
     setLoading(true)
     setError("")
     try {
-      const res = await axios.post(`${API}/analyze`, {
+      const res = await axios.post(`${API_BASE}/analyze`, {
         log_text: logText,
         source_hint: sourceHint || null,
         save: true,
@@ -65,7 +64,7 @@ export default function App() {
 
   const loadIncident = async (id) => {
     try {
-      const res = await axios.get(`${API}/incidents/${id}`)
+      const res = await axios.get(`${API_BASE}/incidents/${id}`)
       setResult(res.data)
       setView("analyze")
       setError("")

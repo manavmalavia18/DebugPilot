@@ -1,9 +1,12 @@
+import { API_BASE } from "../api"
+
 const NAV = [
   { id: "analyze", label: "Analyze", icon: "▸" },
   { id: "history", label: "History", icon: "◷" },
 ]
 
 export default function Sidebar({ active, onNavigate, historyCount }) {
+  const docsHref = API_BASE ? `${API_BASE}/docs` : "/docs"
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-panel">
       <div className="border-b border-border px-4 py-5">
@@ -39,7 +42,7 @@ export default function Sidebar({ active, onNavigate, historyCount }) {
         <p className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">Supported</p>
         <p className="mt-2 leading-relaxed">Kubernetes · Terraform · GitHub Actions · Docker</p>
         <a
-          href="http://localhost:8000/docs"
+          href={docsHref}
           target="_blank"
           rel="noreferrer"
           className="mt-3 inline-block font-mono text-accent hover:underline"
