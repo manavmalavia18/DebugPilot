@@ -99,7 +99,36 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for GCP Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Resolve image push targets
+        id: image_targets
+        env:
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          ECR="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api"
+          {
+            echo "${ECR}:latest"
+            echo "${ECR}:${{ github.sha }}"
+          } > /tmp/image-tags.txt
+
+          if gcloud artifacts repositories describe debugpilot \
+            --location="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+            GAR="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/debugpilot/debugpilot-api"
+            echo "${GAR}:latest" >> /tmp/image-tags.txt
+            echo "${GAR}:${{ github.sha }}" >> /tmp/image-tags.txt
+            echo "gar_push=true" >> "$GITHUB_OUTPUT"
+            echo "gar_image=${GAR}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "gar_push=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GAR repository debugpilot not found — pushing to ECR only. Run Terraform GCP Foundation apply to create it."
+          fi
+
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/image-tags.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -112,10 +141,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:latest
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}
-            us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:latest
-            us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:${{ github.sha }}
+            ${{ steps.image_targets.outputs.tags }}
 
       - name: Update image tag in values.yaml
         run: |
@@ -140,4 +166,8 @@ jobs:
         run: |
           echo "Image pushed:"
           echo "  ECR: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}"
-          echo "  GAR: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:${{ github.sha }}"
+          if [ "${{ steps.image_targets.outputs.gar_push }}" = "true" ]; then
+            echo "  GAR: ${{ steps.image_targets.outputs.gar_image }}"
+          else
+            echo "  GAR: skipped (run Terraform GCP Foundation to create debugpilot repository)"
+          fi
