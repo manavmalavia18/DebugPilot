@@ -1,3 +1,6 @@
+redis:
+  enabled: true
+
 api:
   # Updated by CI on main when GAR repository debugpilot exists (GCP_PROJECT_ID secret)
   image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:latest
@@ -7,3 +10,4 @@ api:
   serviceType: ClusterIP
   anthropicSecretName: debugpilot-secrets
   anthropicSecretKey: ANTHROPIC_API_KEY
+  redisUrl: redis://redis:6379/0

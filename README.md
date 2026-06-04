@@ -59,6 +59,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | API | **Python 3.12**, **FastAPI** | REST endpoints, OpenAPI, static UI in production |
 | AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
 | Persistence | **SQLModel**, **SQLite** (`debugpilot.db`) | Saved incident history |
+| Cache | **Redis** | Caches analysis by log + hint (skips repeat Claude calls) |
 | Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
 | UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
 | HTTP client | **Axios** | Same-origin API in prod; `VITE_API_URL` for local dev |

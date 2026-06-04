@@ -2,6 +2,7 @@ anthropic>=0.40.0
 fastapi>=0.115.0
 prometheus-fastapi-instrumentator>=7.0.0
 python-dotenv>=1.0.0
+redis>=5.0.0
 sqlmodel>=0.0.22
 uvicorn>=0.32.0
 pytest>=8.0.0
