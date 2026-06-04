@@ -12,6 +12,7 @@ spec:
       labels:
         app: debugpilot-api
     spec:
+      serviceAccountName: debugpilot-api
       containers:
         - name: debugpilot-api
           image: {{ .Values.api.image }}
