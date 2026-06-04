@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -29,10 +29,20 @@ from app.models import (
     AnalyzeRequest,
     AnalyzeResponse,
     AnalysisResult,
+    LogUpload,
     SavedIncident,
     SavedIncidentRead,
+    UploadResponse,
     User,
     UserRead,
+)
+from app.storage import (
+    build_storage_key,
+    decode_log_bytes,
+    get_object_bytes,
+    put_object,
+    storage_backend,
+    validate_upload,
 )
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -81,7 +91,12 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "debugpilot", "auth_enabled": auth_enabled()}
+    return {
+        "status": "ok",
+        "service": "debugpilot",
+        "auth_enabled": auth_enabled(),
+        "uploads_backend": storage_backend(),
+    }
 
 
 @app.get("/auth/config")
@@ -135,6 +150,63 @@ def auth_logout():
     return response
 
 
+def _load_upload_log_text(session: Session, user: User, upload_id: int) -> tuple[str, LogUpload]:
+    row = session.get(LogUpload, upload_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    try:
+        raw = get_object_bytes(row.storage_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to read upload: {exc}") from exc
+    text = decode_log_bytes(raw)
+    if not text:
+        raise HTTPException(status_code=400, detail="Upload file has no readable log text")
+    return text, row
+
+
+@app.post("/uploads", response_model=UploadResponse)
+async def upload_log_file(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    data = await file.read()
+    filename = file.filename or "upload.log"
+    try:
+        validate_upload(filename, len(data))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    log_text = decode_log_bytes(data)
+    if not log_text:
+        raise HTTPException(status_code=400, detail="File has no readable log text")
+
+    storage_key = build_storage_key(user.id, filename)
+    try:
+        put_object(storage_key, data, file.content_type or "text/plain")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Upload storage failed: {exc}") from exc
+
+    record = LogUpload(
+        user_id=user.id,
+        filename=filename,
+        storage_key=storage_key,
+        size_bytes=len(data),
+        content_type=file.content_type or "text/plain",
+    )
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+
+    return UploadResponse(
+        id=record.id,
+        filename=record.filename,
+        size_bytes=record.size_bytes,
+        storage_backend=storage_backend(),
+        log_text=log_text[:8000],
+    )
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(
     request: AnalyzeRequest,
@@ -142,8 +214,17 @@ def analyze(
     user: User = Depends(get_current_user),
 ):
     started = time.perf_counter()
+    upload_row: LogUpload | None = None
+    log_text = request.resolved_log_text()
+
+    if request.upload_id:
+        log_text, upload_row = _load_upload_log_text(session, user, request.upload_id)
+
+    if not log_text:
+        raise HTTPException(status_code=400, detail="log_text or upload_id is required")
+
     try:
-        result, cached = analyze_log(request.log_text, request.source_hint)
+        result, cached = analyze_log(log_text, request.source_hint)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
 
@@ -152,7 +233,9 @@ def analyze(
     if request.save:
         saved = SavedIncident(
             user_id=user.id,
-            log_text=request.log_text[:8000],
+            upload_id=upload_row.id if upload_row else request.upload_id,
+            source_filename=upload_row.filename if upload_row else None,
+            log_text=log_text[:8000],
             category=result.category,
             symptom=result.symptom,
             root_cause=result.root_cause,
@@ -192,6 +275,7 @@ def list_incidents(
             root_cause=row.root_cause,
             likely_fix=row.likely_fix,
             confidence=row.confidence,
+            source_filename=row.source_filename,
         )
         for row in rows
     ]
@@ -224,6 +308,7 @@ if FRONTEND_DIST.exists():
                 "openapi.json",
                 "redoc",
                 "auth",
+                "uploads",
             )
         ):
             raise HTTPException(status_code=404, detail="Not found")

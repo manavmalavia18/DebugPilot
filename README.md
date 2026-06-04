@@ -397,6 +397,8 @@ Stop with `Ctrl+C` in the terminal running `start.sh`.
 - **Likely fix**, **prevention** tips  
 - Optional **save** to history (SQLite)
 
+**Log uploads:** On AWS, files go to S3 (`debugpilot-log-uploads-<account_id>` from Terraform bootstrap). EKS node IAM allows `PutObject`/`GetObject`. Helm sets `UPLOADS_S3_BUCKET` in `values.yaml`. Locally, set `UPLOADS_LOCAL_DIR` when S3 is unset.
+
 **Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). `POST /analyze` includes `cached` (boolean) and `duration_ms` so the UI and metrics can show Redis vs Claude. Prometheus counters: `debugpilot_analysis_cache_hits_total`, `debugpilot_analysis_cache_misses_total`. Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
 
 Playbooks under `app/incidents/` are keyword-matched to ground the model in real failure modes from this repo’s infra.
@@ -453,7 +455,8 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | `GET` | `/auth/me` | Current user (session cookie) |
 | `GET` | `/auth/github/login` | Start GitHub OAuth |
 | `POST` | `/auth/logout` | Clear session |
-| `POST` | `/analyze` | Analyze log text; response adds `cached`, `duration_ms` (auth if OAuth configured) |
+| `POST` | `/uploads` | Upload `.log` / `.txt` (max 512 KB); stores in S3 (AWS) or local dir; returns `log_text` + `upload_id` |
+| `POST` | `/analyze` | Analyze log text or `upload_id`; response adds `cached`, `duration_ms` (auth if OAuth configured) |
 | `GET` | `/incidents` | List saved analyses |
 | `GET` | `/incidents/{id}` | Get one analysis |
 | `GET` | `/metrics` | Prometheus metrics |

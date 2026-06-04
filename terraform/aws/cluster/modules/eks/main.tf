@@ -52,3 +52,18 @@ resource "aws_eks_node_group" "workers" {
   depends_on = [aws_iam_role_policy_attachment.node_policy]
   tags = { Name = "${var.project_name}-workers", Project = var.project_name }
 }
+
+resource "aws_iam_role_policy" "node_uploads" {
+  count = var.uploads_bucket_arn != "" ? 1 : 0
+  name  = "${var.project_name}-node-uploads"
+  role  = aws_iam_role.node_group.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+      Resource = "${var.uploads_bucket_arn}/*"
+    }]
+  })
+}
