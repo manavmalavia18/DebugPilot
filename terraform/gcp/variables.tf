@@ -73,6 +73,13 @@ variable "argocd_password_bcrypt" {
   default   = "$2a$10$uaWjWzOi.bXRSaEflJkpH.JXqBpVMx.fwucnfPQtBvSJ1MuUJmhI6"
 }
 
+variable "argocd_github_webhook_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub webhook HMAC secret (webhook.github.secret). Set via TF_VAR_argocd_github_webhook_secret or ARGOCD_GITHUB_WEBHOOK_SECRET in CI."
+}
+
 variable "api_image_tag" {
   type        = string
   default     = "latest"

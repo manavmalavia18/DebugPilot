@@ -24,6 +24,7 @@ jobs:
       TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
       TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      TF_VAR_argocd_github_webhook_secret: ${{ secrets.ARGOCD_GITHUB_WEBHOOK_SECRET }}
 
     steps:
       - uses: actions/checkout@v4

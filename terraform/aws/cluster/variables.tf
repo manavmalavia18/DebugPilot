@@ -55,9 +55,9 @@ variable "domain_name" {
 }
 
 variable "anthropic_api_key" {
-  type      = string
-  sensitive = true
-  default   = ""
+  type        = string
+  sensitive   = true
+  default     = ""
   description = "Anthropic API key for debugpilot-secrets (set via TF_VAR_anthropic_api_key in CI)"
 }
 
@@ -72,4 +72,11 @@ variable "argocd_password_bcrypt" {
   type      = string
   sensitive = true
   default   = "$2a$10$uaWjWzOi.bXRSaEflJkpH.JXqBpVMx.fwucnfPQtBvSJ1MuUJmhI6"
+}
+
+variable "argocd_github_webhook_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub webhook HMAC secret (webhook.github.secret). Set via TF_VAR_argocd_github_webhook_secret or ARGOCD_GITHUB_WEBHOOK_SECRET in CI."
 }

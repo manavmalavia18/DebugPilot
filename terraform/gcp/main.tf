@@ -170,10 +170,15 @@ resource "helm_release" "argocd" {
   values = [
     yamlencode({
       configs = {
-        secret = {
-          argocdServerAdminPassword      = var.argocd_password_bcrypt
-          argocdServerAdminPasswordMtime = "2024-01-01T00:00:00Z"
-        }
+        secret = merge(
+          {
+            argocdServerAdminPassword      = var.argocd_password_bcrypt
+            argocdServerAdminPasswordMtime = "2024-01-01T00:00:00Z"
+          },
+          var.argocd_github_webhook_secret != "" ? {
+            githubSecret = var.argocd_github_webhook_secret
+          } : {}
+        )
       }
 
       server = {
