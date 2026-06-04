@@ -1,4 +1,5 @@
 import json
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
@@ -12,7 +13,13 @@ from sqlmodel import Session, select
 
 from app.analyzer import analyze_log
 from app.database import create_db_and_tables, get_session
-from app.models import AnalyzeRequest, AnalysisResult, SavedIncident, SavedIncidentRead
+from app.models import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    AnalysisResult,
+    SavedIncident,
+    SavedIncidentRead,
+)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -62,12 +69,15 @@ def health():
     return {"status": "ok", "service": "debugpilot"}
 
 
-@app.post("/analyze", response_model=AnalysisResult)
+@app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest, session: Session = Depends(get_session)):
+    started = time.perf_counter()
     try:
-        result = analyze_log(request.log_text, request.source_hint)
+        result, cached = analyze_log(request.log_text, request.source_hint)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+
+    duration_ms = round((time.perf_counter() - started) * 1000, 1)
 
     if request.save:
         saved = SavedIncident(
@@ -82,7 +92,11 @@ def analyze(request: AnalyzeRequest, session: Session = Depends(get_session)):
         session.add(saved)
         session.commit()
 
-    return result
+    return AnalyzeResponse(
+        **result.model_dump(),
+        cached=cached,
+        duration_ms=duration_ms,
+    )
 
 
 @app.get("/incidents", response_model=List[SavedIncidentRead])

@@ -29,6 +29,16 @@ class AnalysisResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AnalyzeResponse(AnalysisResult):
+    """POST /analyze — diagnosis fields plus cache and timing metadata."""
+
+    cached: bool = False
+    duration_ms: float = Field(
+        ge=0,
+        description="Wall-clock time for this request in milliseconds",
+    )
+
+
 class SavedIncident(SQLModel, table=True):
     id: Optional[int] = SQLField(default=None, primary_key=True)
     created_at: datetime = SQLField(default_factory=datetime.utcnow)
