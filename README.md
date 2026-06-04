@@ -167,7 +167,7 @@ You can run **one cloud or both**; destroying AWS does not remove GCP DNS record
 
 1. Merge this branch, then create **new** remote state buckets matching `terraform/*/backend.tf` (`debugpilot-terraform-state-…`).
 2. **AWS:** run `Terraform AWS Foundation` → apply (ECR `debugpilot-api`), then `Terraform AWS Cluster` → apply (new EKS cluster `debugpilot`).
-3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, fix `charts/debugpilot/values-gcp.yaml` image project to your `GCP_PROJECT_ID`, then `Terraform GCP Cluster` → apply.
+3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, run CI on `main` (updates `values-gcp.yaml` when GAR exists), then `Terraform GCP Cluster` → apply.
 4. Push to `main` so CI builds and tags `debugpilot-api` in both registries.
 5. Delete stale Cloudflare `jobradar*` records; point the Argo CD GitHub webhook at `debugpilot-argocd` (and GCP equivalent) if used.
 
