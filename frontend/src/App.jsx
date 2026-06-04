@@ -65,7 +65,7 @@ export default function App() {
   const loadIncident = async (id) => {
     try {
       const res = await axios.get(`${API_BASE}/incidents/${id}`)
-      setResult(res.data)
+      setResult({ ...res.data, cached: undefined, duration_ms: undefined })
       setView("analyze")
       setError("")
     } catch (err) {

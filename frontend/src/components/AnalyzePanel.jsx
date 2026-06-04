@@ -115,9 +115,23 @@ export default function AnalyzePanel({
             <p className="text-xs text-muted">Structured root cause, commands, and fix</p>
           </div>
           {result && (
-            <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${confidenceBadge(result.confidence)}`}>
-              {result.confidence}
-            </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {typeof result.cached === "boolean" && (
+                <span
+                  className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                    result.cached
+                      ? "border-info/40 bg-info/10 text-info"
+                      : "border-accent/40 bg-accent/10 text-accent"
+                  }`}
+                >
+                  {result.cached ? "Redis cache" : "Claude"}
+                  {typeof result.duration_ms === "number" ? ` · ${result.duration_ms}ms` : ""}
+                </span>
+              )}
+              <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${confidenceBadge(result.confidence)}`}>
+                {result.confidence}
+              </span>
+            </div>
           )}
         </div>
 

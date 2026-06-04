@@ -397,7 +397,7 @@ Stop with `Ctrl+C` in the terminal running `start.sh`.
 - **Likely fix**, **prevention** tips  
 - Optional **save** to history (SQLite)
 
-**Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
+**Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). `POST /analyze` includes `cached` (boolean) and `duration_ms` so the UI and metrics can show Redis vs Claude. Prometheus counters: `debugpilot_analysis_cache_hits_total`, `debugpilot_analysis_cache_misses_total`. Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
 
 Playbooks under `app/incidents/` are keyword-matched to ground the model in real failure modes from this repo’s infra.
 
@@ -449,7 +449,7 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `POST` | `/analyze` | Analyze log text |
+| `POST` | `/analyze` | Analyze log text; response adds `cached`, `duration_ms` |
 | `GET` | `/incidents` | List saved analyses |
 | `GET` | `/incidents/{id}` | Get one analysis |
 | `GET` | `/metrics` | Prometheus metrics |

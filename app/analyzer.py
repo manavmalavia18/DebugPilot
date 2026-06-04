@@ -1,9 +1,20 @@
 import json
 from pathlib import Path
 
+from prometheus_client import Counter
+
 from app.ai import analyze_with_claude
 from app.cache import cache_key, get_cached_analysis, set_cached_analysis
 from app.models import AnalysisResult, SourceCategory
+
+analysis_cache_hits = Counter(
+    "debugpilot_analysis_cache_hits_total",
+    "Analysis responses served from Redis cache",
+)
+analysis_cache_misses = Counter(
+    "debugpilot_analysis_cache_misses_total",
+    "Analysis responses that invoked Claude",
+)
 
 INCIDENTS_DIR = Path(__file__).parent / "incidents"
 
@@ -96,11 +107,12 @@ def detect_source(log_text: str, source_hint: SourceCategory | None) -> SourceCa
     return "app"
 
 
-def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> AnalysisResult:
+def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tuple[AnalysisResult, bool]:
     key = cache_key(log_text, source_hint)
-    cached = get_cached_analysis(key)
-    if cached is not None:
-        return AnalysisResult(**cached)
+    cached_payload = get_cached_analysis(key)
+    if cached_payload is not None:
+        analysis_cache_hits.inc()
+        return AnalysisResult(**cached_payload), True
 
     relevant = find_relevant_incidents(log_text)
     category = detect_source(log_text, source_hint)
@@ -120,7 +132,8 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> Ana
         result.category = category
 
     set_cached_analysis(key, result.model_dump())
-    return result
+    analysis_cache_misses.inc()
+    return result, False
 
 
 def result_to_json(result: AnalysisResult) -> str:

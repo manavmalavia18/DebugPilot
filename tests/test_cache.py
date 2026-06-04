@@ -49,11 +49,13 @@ def test_analyze_log_uses_redis_cache(mock_get_redis, mock_claude):
     mock_claude.return_value = payload
 
     log = "redis connection refused localhost:6379 unique-test-12345"
-    first = analyze_log(log, "kubernetes")
-    second = analyze_log(log, "kubernetes")
+    first, first_cached = analyze_log(log, "kubernetes")
+    second, second_cached = analyze_log(log, "kubernetes")
 
     assert first.symptom == "Redis down"
     assert second.symptom == "Redis down"
+    assert first_cached is False
+    assert second_cached is True
     mock_claude.assert_called_once()
 
 
@@ -72,6 +74,7 @@ def test_analyze_log_without_redis_still_works(mock_get_redis):
             "warnings": [],
             "similar_incidents": [],
         }
-        result = analyze_log("some log without redis cache", None)
+        result, cached = analyze_log("some log without redis cache", None)
         assert isinstance(result, AnalysisResult)
+        assert cached is False
         mock_claude.assert_called_once()
