@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "charts/debugpilot/values.yaml"
+      - "charts/debugpilot/values-gcp.yaml"
   pull_request:
     branches: [main]
 
@@ -117,14 +118,23 @@ jobs:
             us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:latest
             us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:${{ github.sha }}
 
-      - name: Update image tag in values.yaml
+      - name: Update image tags in Helm values
+        env:
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          sed -i "s|image:.*debugpilot-api.*|image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}|" charts/debugpilot/values.yaml
+          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}"
+          sed -i "s|image:.*debugpilot-api.*|image: ${ECR_IMAGE}|" charts/debugpilot/values.yaml
+          git add charts/debugpilot/values.yaml
+
+          if [ "${{ steps.image_targets.outputs.gar_push }}" = "true" ]; then
+            GAR_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/debugpilot/debugpilot-api:${{ github.sha }}"
+            sed -i "s|image:.*debugpilot-api.*|image: ${GAR_IMAGE}|" charts/debugpilot/values-gcp.yaml
+            git add charts/debugpilot/values-gcp.yaml
+          fi
 
           git config user.email "ci@debugpilot.dev"
           git config user.name "CI Bot"
-
-          git add charts/debugpilot/values.yaml
 
           if git diff --cached --quiet; then
             echo "No image tag changes to commit."
