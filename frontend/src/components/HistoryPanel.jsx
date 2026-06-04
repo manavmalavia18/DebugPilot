@@ -31,6 +31,7 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                 <th className="px-4 py-3 font-normal">When</th>
                 <th className="px-4 py-3 font-normal">Category</th>
                 <th className="px-4 py-3 font-normal">Symptom</th>
+                <th className="px-4 py-3 font-normal">File</th>
                 <th className="px-4 py-3 font-normal">Confidence</th>
               </tr>
             </thead>
@@ -46,6 +47,9 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                   </td>
                   <td className="px-4 py-3 text-xs text-info">{item.category}</td>
                   <td className="max-w-md truncate px-4 py-3 text-neutral-200">{item.symptom}</td>
+                  <td className="max-w-[140px] truncate px-4 py-3 text-xs text-muted">
+                    {item.source_filename || "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2 text-xs capitalize text-neutral-400">
                       <span className={`h-1.5 w-1.5 ${confidenceDot(item.confidence)}`} />

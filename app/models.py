@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Field as SQLField, SQLModel
 
 SourceCategory = Literal[
@@ -11,9 +11,19 @@ ConfidenceLevel = Literal["high", "medium", "low"]
 
 
 class AnalyzeRequest(BaseModel):
-    log_text: str = Field(min_length=1)
+    log_text: str = Field(default="", max_length=8000)
     source_hint: Optional[SourceCategory] = None
     save: bool = True
+    upload_id: Optional[int] = None
+
+    def resolved_log_text(self) -> str:
+        return self.log_text.strip()
+
+    @model_validator(mode="after")
+    def require_log_or_upload(self):
+        if not self.upload_id and not self.log_text.strip():
+            raise ValueError("log_text or upload_id is required")
+        return self
 
 
 class AnalysisResult(BaseModel):
@@ -55,9 +65,29 @@ class UserRead(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class LogUpload(SQLModel, table=True):
+    id: Optional[int] = SQLField(default=None, primary_key=True)
+    user_id: int = SQLField(foreign_key="user.id", index=True)
+    created_at: datetime = SQLField(default_factory=datetime.utcnow)
+    filename: str
+    storage_key: str
+    size_bytes: int
+    content_type: str = "text/plain"
+
+
+class UploadResponse(BaseModel):
+    id: int
+    filename: str
+    size_bytes: int
+    storage_backend: str
+    log_text: str
+
+
 class SavedIncident(SQLModel, table=True):
     id: Optional[int] = SQLField(default=None, primary_key=True)
     user_id: int = SQLField(foreign_key="user.id", index=True)
+    upload_id: Optional[int] = SQLField(default=None, foreign_key="logupload.id")
+    source_filename: Optional[str] = None
     created_at: datetime = SQLField(default_factory=datetime.utcnow)
     log_text: str
     category: str
@@ -76,3 +106,4 @@ class SavedIncidentRead(BaseModel):
     root_cause: str
     likely_fix: str
     confidence: str
+    source_filename: Optional[str] = None

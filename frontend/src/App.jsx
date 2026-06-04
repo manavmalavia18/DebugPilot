@@ -24,6 +24,9 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState("")
+  const [uploadId, setUploadId] = useState(null)
+  const [uploadFilename, setUploadFilename] = useState("")
+  const [uploading, setUploading] = useState(false)
 
   const loadAuth = useCallback(async () => {
     try {
@@ -82,15 +85,17 @@ export default function App() {
   }, [user, loadHistory])
 
   const analyze = async () => {
-    if (!logText.trim()) return
+    if (!logText.trim() && !uploadId) return
     setLoading(true)
     setError("")
     try {
-      const res = await api.post("/analyze", {
+      const payload = {
         log_text: logText,
         source_hint: sourceHint || null,
         save: true,
-      })
+      }
+      if (uploadId) payload.upload_id = uploadId
+      const res = await api.post("/analyze", payload)
       setResult(res.data)
       setView("analyze")
       loadHistory()
@@ -131,7 +136,39 @@ export default function App() {
   const loadPreset = (preset) => {
     setLogText(preset.log)
     setSourceHint(preset.source)
+    setUploadId(null)
+    setUploadFilename("")
     setError("")
+  }
+
+  const uploadLogFile = async (file) => {
+    setUploading(true)
+    setError("")
+    const form = new FormData()
+    form.append("file", file)
+    try {
+      const res = await api.post("/uploads", form)
+      setLogText(res.data.log_text)
+      setUploadId(res.data.id)
+      setUploadFilename(res.data.filename)
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setUser(null)
+        setError("Sign in required to upload logs.")
+      } else {
+        setError(err.response?.data?.detail || err.message || "Upload failed")
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleLogTextChange = (value) => {
+    setLogText(value)
+    if (uploadId) {
+      setUploadId(null)
+      setUploadFilename("")
+    }
   }
 
   const needsLogin = authEnabled && !user
@@ -179,14 +216,17 @@ export default function App() {
               {view === "analyze" ? (
                 <AnalyzePanel
                   logText={logText}
-                  setLogText={setLogText}
+                  setLogText={handleLogTextChange}
                   sourceHint={sourceHint}
                   setSourceHint={setSourceHint}
                   loading={loading}
+                  uploading={uploading}
+                  uploadFilename={uploadFilename}
                   error={error}
                   result={result}
                   onAnalyze={analyze}
                   onLoadPreset={loadPreset}
+                  onUploadFile={uploadLogFile}
                 />
               ) : (
                 <HistoryPanel

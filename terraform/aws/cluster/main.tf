@@ -22,6 +22,10 @@ module "vpc" {
   project_name = var.project_name
 }
 
+data "aws_s3_bucket" "log_uploads" {
+  bucket = "debugpilot-log-uploads-${var.aws_account_id}"
+}
+
 module "eks" {
   source             = "./modules/eks"
   project_name       = var.project_name
@@ -31,6 +35,7 @@ module "eks" {
   node_count         = var.node_count
   node_count_min     = var.node_count_min
   node_count_max     = var.node_count_max
+  uploads_bucket_arn = data.aws_s3_bucket.log_uploads.arn
 }
 
 module "ecr" {

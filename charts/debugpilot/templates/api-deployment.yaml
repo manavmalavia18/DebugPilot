@@ -54,6 +54,12 @@ spec:
                   name: {{ .Values.api.anthropicSecretName }}
                   key: JWT_SECRET
                   optional: true
+            {{- if .Values.api.uploadsS3Bucket }}
+            - name: UPLOADS_S3_BUCKET
+              value: {{ .Values.api.uploadsS3Bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.api.awsRegion | default "us-east-1" | quote }}
+            {{- end }}
           resources:
             requests:
               cpu: 100m

@@ -22,3 +22,5 @@ api:
   redisUrl: redis://redis:6379/0
   publicBaseUrl: https://debugpilot.manavmalavia.org
   authCookieSecure: true
+  uploadsS3Bucket: debugpilot-log-uploads-565273632019
+  awsRegion: us-east-1

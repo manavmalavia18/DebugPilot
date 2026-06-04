@@ -25,10 +25,13 @@ export default function AnalyzePanel({
   sourceHint,
   setSourceHint,
   loading,
+  uploading,
+  uploadFilename,
   error,
   result,
   onAnalyze,
   onLoadPreset,
+  onUploadFile,
 }) {
   const lineCount = logText ? logText.split("\n").length : 1
 
@@ -39,7 +42,7 @@ export default function AnalyzePanel({
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
             <h2 className="font-mono text-sm font-semibold">Error log input</h2>
-            <p className="text-xs text-muted">Paste kubectl, Terraform, CI, or stack trace output</p>
+            <p className="text-xs text-muted">Paste or upload kubectl, Terraform, CI, or stack trace output</p>
           </div>
           <span className="font-mono text-[10px] text-muted">{lineCount} lines</span>
         </div>
@@ -74,6 +77,28 @@ export default function AnalyzePanel({
               <option key={opt.value || "auto"} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label className="cursor-pointer border border-border bg-void px-3 py-2 font-mono text-[11px] text-neutral-300 transition-colors hover:border-accent/50 hover:text-accent">
+              {uploading ? "Uploading..." : "Upload .log / .txt"}
+              <input
+                type="file"
+                accept=".log,.txt,.json,.out,.err,text/plain"
+                className="hidden"
+                disabled={uploading || loading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) onUploadFile(file)
+                  e.target.value = ""
+                }}
+              />
+            </label>
+            {uploadFilename && (
+              <span className="border border-info/30 bg-info/10 px-2 py-1 font-mono text-[10px] text-info">
+                {uploadFilename}
+              </span>
+            )}
+          </div>
 
           <div className="relative">
             <div className="absolute left-0 top-0 bottom-0 w-10 border-r border-border bg-black/40 pt-3 text-right font-mono text-[10px] leading-5 text-neutral-600 select-none">

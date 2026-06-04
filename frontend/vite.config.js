@@ -10,7 +10,7 @@ export default defineConfig({
       "/auth": "http://127.0.0.1:8000",
       "/analyze": "http://127.0.0.1:8000",
       "/incidents": "http://127.0.0.1:8000",
-      "/health": "http://127.0.0.1:8000",
+      "/uploads": "http://127.0.0.1:8000",
     },
   },
 })
