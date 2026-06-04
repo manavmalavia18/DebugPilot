@@ -478,17 +478,26 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 |--------|---------|
 | `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
 | `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
-| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App — required for sign-in on production |
-| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App |
-| `JWT_SECRET` | Session cookie signing (`openssl rand -hex 32`) |
+| `DEBUGPILOT_OAUTH_CLIENT_ID_AWS` | OAuth Client ID for AWS (`debugpilot.manavmalavia.org`) |
+| `DEBUGPILOT_OAUTH_CLIENT_SECRET_AWS` | OAuth client secret for AWS |
+| `DEBUGPILOT_OAUTH_CLIENT_ID_GCP` | OAuth Client ID for GCP (`debugpilot-gcp.manavmalavia.org`) |
+| `DEBUGPILOT_OAUTH_CLIENT_SECRET_GCP` | OAuth client secret for GCP |
+| `JWT_SECRET` | Session cookie signing — same value on both clouds (`openssl rand -hex 32`) |
 
 ### GitHub sign-in (abuse protection)
 
 When `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set on the API (via `debugpilot-secrets`), `/analyze` and `/incidents` require a GitHub login. Sessions use an httpOnly cookie (7 days).
 
-1. Create a [GitHub OAuth App](https://github.com/settings/developers): **OAuth App** (not GitHub App).
-2. **Authorization callback URL:** `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` (and `http://localhost:8000/auth/github/callback` for local).
-3. Add Client ID, Client Secret, and `JWT_SECRET` to repo secrets (Terraform) or patch the cluster secret:
+| Cloud | OAuth callback URL |
+|-------|-------------------|
+| **AWS** | `https://debugpilot.manavmalavia.org/auth/github/callback` |
+| **GCP** | `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` |
+
+Repo secret names cannot start with `GITHUB` (reserved). Use `DEBUGPILOT_OAUTH_*` above.
+
+1. Create a [GitHub OAuth App](https://github.com/settings/developers) per hostname (**OAuth App**, device flow off).
+2. Add the `DEBUGPILOT_OAUTH_*` secrets and `JWT_SECRET`, then run **Terraform GCP/AWS Cluster → apply**.
+3. Or patch the cluster secret manually:
 
    ```bash
    kubectl -n default patch secret debugpilot-secrets --type merge -p '{
