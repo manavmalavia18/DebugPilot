@@ -1,27 +1,27 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: jobradar-ingress
+  name: debugpilot-ingress
   namespace: default
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    external-dns.alpha.kubernetes.io/hostname: jobradar-gcp.manavmalavia.org
+    external-dns.alpha.kubernetes.io/hostname: debugpilot.manavmalavia.org
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - jobradar-gcp.manavmalavia.org
-      secretName: jobradar-gcp-tls
+        - debugpilot.manavmalavia.org
+      secretName: debugpilot-tls
   rules:
-    - host: jobradar-gcp.manavmalavia.org
+    - host: debugpilot.manavmalavia.org
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: jobradar-api
+                name: debugpilot-api
                 port:
                   number: 8000

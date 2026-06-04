@@ -218,10 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-Jobradar_accessKeys.csv
+Debugpilot_accessKeys.csv
 *.csv
 debugpilot.db
-jobradar.db
+debugpilot.db
 brew
 terraform/*.tfvars
 terraform/.terraform/

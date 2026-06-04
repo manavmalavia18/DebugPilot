@@ -41,7 +41,7 @@ jobs:
       - name: Configure kubectl for EKS
         run: |
           aws eks update-kubeconfig \
-            --name jobradar \
+            --name debugpilot \
             --region ${{ secrets.AWS_REGION }}
 
       - name: Sync Anthropic API secret
@@ -61,7 +61,7 @@ jobs:
         run: |
           if [ -z "${{ inputs.image_tag }}" ]; then
             IMAGE_TAG=$(aws ecr describe-images \
-              --repository-name jobradar-api \
+              --repository-name debugpilot-api \
               --region ${{ secrets.AWS_REGION }} \
               --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[1]' \
               --output text)
@@ -74,25 +74,25 @@ jobs:
 
       - name: Deploy to EKS
         env:
-          IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ steps.resolve_tag_aws.outputs.image_tag }}
+          IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ steps.resolve_tag_aws.outputs.image_tag }}
         run: |
           echo "Deploying image tag: ${{ steps.resolve_tag_aws.outputs.image_tag }}"
-          if helm status jobradar -n default >/dev/null 2>&1; then
-            helm upgrade --install jobradar ./charts/jobradar \
+          if helm status debugpilot -n default >/dev/null 2>&1; then
+            helm upgrade --install debugpilot ./charts/debugpilot \
               --set api.image="$IMAGE" \
               --set api.replicas=1
           else
             echo "No Helm release — app is managed by ArgoCD. Patching deployment image..."
-            kubectl set image deployment/jobradar-api jobradar-api="$IMAGE"
+            kubectl set image deployment/debugpilot-api debugpilot-api="$IMAGE"
           fi
-          kubectl rollout restart deployment/jobradar-api
-          kubectl rollout status deployment/jobradar-api --timeout=180s
-          kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
+          kubectl rollout restart deployment/debugpilot-api
+          kubectl rollout status deployment/debugpilot-api --timeout=180s
+          kubectl wait --for=condition=ready pod -l app=debugpilot-api --timeout=180s
 
       - name: Verify deployment
         run: |
-          kubectl get deployment jobradar-api
-          kubectl get pods -l app=jobradar-api
+          kubectl get deployment debugpilot-api
+          kubectl get pods -l app=debugpilot-api
 
   deploy-gcp:
     if: inputs.cloud == 'gcp' || inputs.cloud == 'both'
@@ -120,7 +120,7 @@ jobs:
 
       - name: Configure kubectl for GKE
         run: |
-          gcloud container clusters get-credentials jobradar \
+          gcloud container clusters get-credentials debugpilot \
             --region=${{ secrets.GCP_REGION }}
 
       - name: Sync Anthropic API secret
@@ -140,7 +140,7 @@ jobs:
         run: |
           if [ -z "${{ inputs.image_tag }}" ]; then
             IMAGE_TAG=$(gcloud artifacts docker images list \
-              us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api \
+              us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api \
               --sort-by=~UPDATE_TIME \
               --limit=1 \
               --format='value(tags)' | head -1)
@@ -153,23 +153,23 @@ jobs:
 
       - name: Deploy to GKE
         env:
-          IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ steps.resolve_tag_gcp.outputs.image_tag }}
+          IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api:${{ steps.resolve_tag_gcp.outputs.image_tag }}
         run: |
           echo "Deploying image tag: ${{ steps.resolve_tag_gcp.outputs.image_tag }}"
-          if helm status jobradar -n default >/dev/null 2>&1; then
-            helm upgrade --install jobradar ./charts/jobradar \
-              -f charts/jobradar/values-gcp.yaml \
+          if helm status debugpilot -n default >/dev/null 2>&1; then
+            helm upgrade --install debugpilot ./charts/debugpilot \
+              -f charts/debugpilot/values-gcp.yaml \
               --set api.image="$IMAGE" \
               --set api.replicas=1
           else
             echo "No Helm release — app is managed by ArgoCD. Patching deployment image..."
-            kubectl set image deployment/jobradar-api jobradar-api="$IMAGE"
+            kubectl set image deployment/debugpilot-api debugpilot-api="$IMAGE"
           fi
-          kubectl rollout restart deployment/jobradar-api
-          kubectl rollout status deployment/jobradar-api --timeout=180s
-          kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
+          kubectl rollout restart deployment/debugpilot-api
+          kubectl rollout status deployment/debugpilot-api --timeout=180s
+          kubectl wait --for=condition=ready pod -l app=debugpilot-api --timeout=180s
 
       - name: Verify deployment
         run: |
-          kubectl get deployment jobradar-api
-          kubectl get pods -l app=jobradar-api
+          kubectl get deployment debugpilot-api
+          kubectl get pods -l app=debugpilot-api

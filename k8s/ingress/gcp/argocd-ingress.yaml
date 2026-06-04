@@ -6,17 +6,17 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    external-dns.alpha.kubernetes.io/hostname: jobradar-gcp-argocd.manavmalavia.org
+    external-dns.alpha.kubernetes.io/hostname: debugpilot-gcp-argocd.manavmalavia.org
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - jobradar-gcp-argocd.manavmalavia.org
-      secretName: jobradar-gcp-argocd-tls
+        - debugpilot-gcp-argocd.manavmalavia.org
+      secretName: debugpilot-gcp-argocd-tls
   rules:
-    - host: jobradar-gcp-argocd.manavmalavia.org
+    - host: debugpilot-gcp-argocd.manavmalavia.org
       http:
         paths:
           - path: /

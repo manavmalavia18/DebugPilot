@@ -8,7 +8,7 @@ __pycache__
 .env
 *.csv
 debugpilot.db
-jobradar.db
+debugpilot.db
 
 frontend/node_modules
 frontend/dist

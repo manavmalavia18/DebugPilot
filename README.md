@@ -4,8 +4,8 @@
 </p>
 
 <p align="center">
-  <a href="https://jobradar.manavmalavia.org">AWS demo</a> ·
-  <a href="https://jobradar-gcp.manavmalavia.org">GCP demo</a> ·
+  <a href="https://debugpilot.manavmalavia.org">AWS demo</a> ·
+  <a href="https://debugpilot-gcp.manavmalavia.org">GCP demo</a> ·
   <a href="#-quick-start-local">Local setup</a> ·
   <a href="#-multi-cloud-infrastructure">Multi-cloud</a> ·
   <a href="#-dns-external-dns-and-failover-behavior">DNS</a>
@@ -42,12 +42,10 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | Layer | Responsibility |
 |--------|----------------|
 | **Application** | FastAPI API, React ops UI, SQLite history, Prometheus metrics |
-| **Packaging** | Helm chart `charts/jobradar`, multi-stage Docker image |
+| **Packaging** | Helm chart `charts/debugpilot`, multi-stage Docker image |
 | **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD |
 | **GCP** | GKE, Artifact Registry, same platform components, separate hostnames |
 | **Delivery** | GitHub Actions CI, GitOps sync, optional GitHub → Argo CD webhook |
-
-> Kubernetes and Helm release names use the `jobradar` prefix; the application brand is **DebugPilot**.
 
 ---
 
@@ -79,11 +77,11 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 |-----------|------------|------|
 | Compute | **Amazon EKS 1.34**, managed node group (`t3.small`) | Kubernetes control plane and workers |
 | Network | **VPC** (public subnets), **Internet Gateway** | Cluster networking |
-| Registry | **ECR** `jobradar-api` | Container images (bootstrap stack) |
+| Registry | **ECR** `debugpilot-api` | Container images (bootstrap stack) |
 | Ingress | **ingress-nginx** (NLB/ELB) | HTTP/S routing to services |
 | DNS | **external-dns** + **Cloudflare** provider | Syncs Ingress hostnames → Cloudflare records |
 | TLS | **cert-manager**, Let's Encrypt (`letsencrypt-prod`) | TLS secrets per hostname |
-| GitOps | **Argo CD** | Syncs `charts/jobradar` from GitHub `main` |
+| GitOps | **Argo CD** | Syncs `charts/debugpilot` from GitHub `main` |
 | Observability | **kube-prometheus-stack** | Prometheus + Grafana |
 | IaC | **Terraform** (`terraform/aws/bootstrap`, `terraform/aws/cluster`) | Bootstrap vs cluster state split |
 
@@ -92,7 +90,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | Component | Technology | Role |
 |-----------|------------|------|
 | Compute | **Google GKE**, regional cluster | Parallel stack to AWS |
-| Registry | **Artifact Registry** `jobradar/jobradar-api` | Same CI image tags as ECR |
+| Registry | **Artifact Registry** `debugpilot/debugpilot-api` | Same CI image tags as ECR |
 | Network | **VPC** module (`terraform/gcp/modules/network`) | GKE networking |
 | Ingress / DNS / TLS | Same pattern as AWS | **Different hostnames** (see below) |
 | GitOps | **Argo CD** with `values-gcp.yaml` | Same chart, GCP-specific image registry path |
@@ -103,7 +101,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | Component | Technology | Role |
 |-----------|------------|------|
 | CI | **GitHub Actions** | Test, lint, Helm validate, buildx push amd64+arm64 |
-| GitOps | **Argo CD** automated sync + self-heal | Cluster follows `charts/jobradar` on `main` |
+| GitOps | **Argo CD** automated sync + self-heal | Cluster follows `charts/debugpilot` on `main` |
 | Webhook | **GitHub → `/api/webhook`** | Near-instant refresh on push (vs ~3 min poll) |
 | Deploy workflow | Manual dispatch | Optional rollout / image patch when not using Helm release |
 
@@ -117,9 +115,9 @@ DebugPilot is designed to run in **either** cloud without changing application c
 
 | Service | AWS (EKS) | GCP (GKE) |
 |---------|-----------|-----------|
-| **API** | https://jobradar.manavmalavia.org | https://jobradar-gcp.manavmalavia.org |
-| **Grafana** | https://jobradar-grafana.manavmalavia.org | https://jobradar-gcp-grafana.manavmalavia.org |
-| **Argo CD** | https://jobradar-argocd.manavmalavia.org | https://jobradar-gcp-argocd.manavmalavia.org |
+| **API** | https://debugpilot.manavmalavia.org | https://debugpilot-gcp.manavmalavia.org |
+| **Grafana** | https://debugpilot-grafana.manavmalavia.org | https://debugpilot-gcp-grafana.manavmalavia.org |
+| **Argo CD** | https://debugpilot-argocd.manavmalavia.org | https://debugpilot-gcp-argocd.manavmalavia.org |
 
 ### Isolation strategy
 
@@ -127,10 +125,10 @@ DebugPilot is designed to run in **either** cloud without changing application c
 |---------|-----|-----|
 | Terraform path | `terraform/aws/` | `terraform/gcp/` |
 | Ingress manifests | `k8s/ingress/aws/` | `k8s/ingress/gcp/` |
-| external-dns `txtOwnerId` | `jobradar-aws` | `jobradar-gcp` |
-| DNS record prefix | `jobradar`, `jobradar-grafana`, … | `jobradar-gcp`, `jobradar-gcp-grafana`, … |
+| external-dns `txtOwnerId` | `debugpilot-aws` | `debugpilot-gcp` |
+| DNS record prefix | `debugpilot`, `debugpilot-grafana`, … | `debugpilot-gcp`, `debugpilot-gcp-grafana`, … |
 | Image registry | ECR | Artifact Registry |
-| Helm values file | `charts/jobradar/values.yaml` | `charts/jobradar/values-gcp.yaml` |
+| Helm values file | `charts/debugpilot/values.yaml` | `charts/debugpilot/values-gcp.yaml` |
 
 CI pushes **one build** to **both** registries; each cluster’s Argo CD Application points at the registry and values file for that cloud.
 
@@ -154,15 +152,23 @@ terraform/
 1. `Terraform AWS Bootstrap` → ECR  
 2. Merge to `main` → CI builds image and updates `values.yaml`  
 3. `Terraform AWS` → **apply** → EKS + platform + Argo CD Application  
-4. Verify DNS and `curl https://jobradar.manavmalavia.org/health`
+4. Verify DNS and `curl https://debugpilot.manavmalavia.org/health`
 
 **GCP** (optional second region/cloud)
 
 1. `Terraform GCP Foundation` → Artifact Registry + state  
 2. `Terraform GCP` → **apply** → GKE + platform  
-3. Verify https://jobradar-gcp.manavmalavia.org  
+3. Verify https://debugpilot-gcp.manavmalavia.org  
 
 You can run **one cloud or both**; destroying AWS does not remove GCP DNS records (separate `txtOwnerId` and hostnames).
+
+### Greenfield after the rename (your flow)
+
+1. Merge this branch, then create **new** remote state buckets matching `terraform/*/backend.tf` (`debugpilot-terraform-state-…`).
+2. **AWS:** run `Terraform AWS Bootstrap` → apply (ECR `debugpilot-api`), then `Terraform AWS` → apply (new EKS cluster `debugpilot`).
+3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, fix `charts/debugpilot/values-gcp.yaml` image project to your `GCP_PROJECT_ID`, then `Terraform GCP` → apply.
+4. Push to `main` so CI builds and tags `debugpilot-api` in both registries.
+5. Delete stale Cloudflare `jobradar*` records; point the Argo CD GitHub webhook at `debugpilot-argocd` (and GCP equivalent) if used.
 
 ---
 
@@ -197,8 +203,8 @@ flowchart TB
     U[Browser]
   end
   subgraph dns [Cloudflare DNS]
-    AWSrec[jobradar.* records]
-    GCPrec[jobradar-gcp.* records]
+    AWSrec[debugpilot.* records]
+    GCPrec[debugpilot-gcp.* records]
   end
   subgraph aws [AWS EKS]
     AWSlb[NLB / ELB]
@@ -234,7 +240,7 @@ flowchart TB
                                       └──────┬───────┘
                                              ▼
                                       ┌──────────────┐
-                                      │ jobradar-api │
+                                      │ debugpilot-api │
                                       │   pods       │
                                       └──────────────┘
 ```
@@ -242,7 +248,7 @@ flowchart TB
 | Phase | Tool | What happens |
 |-------|------|----------------|
 | **Build** | GitHub Actions CI | pytest, ruff, frontend build, Docker buildx, push to ECR + GAR |
-| **Config git** | CI bot commit | Updates `charts/jobradar/values.yaml` image digest on `main` |
+| **Config git** | CI bot commit | Updates `charts/debugpilot/values.yaml` image digest on `main` |
 | **Sync** | Argo CD | Renders Helm chart → applies Deployment, Service, HPA, ServiceMonitor |
 | **Platform** | Terraform (manual) | Cluster, ingress controller, external-dns, cert-manager, Argo CD install |
 | **Edge** | Cloudflare + external-dns | Hostname → load balancer IP/CNAME per cloud |
@@ -261,12 +267,12 @@ DNS is the **edge** of the system: users hit Cloudflare hostnames that must poin
 2. **Ingress** resources in `k8s/ingress/aws/` or `k8s/ingress/gcp/` annotate desired hostnames:
 
    ```yaml
-   external-dns.alpha.kubernetes.io/hostname: jobradar.manavmalavia.org
+   external-dns.alpha.kubernetes.io/hostname: debugpilot.manavmalavia.org
    external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
    ```
 
 3. **external-dns** (Helm release in cluster) watches Ingress objects and creates/updates **CNAME** (AWS) or **A** (GCP) records in Cloudflare.
-4. **TXT records** (`cname-jobradar...`) record ownership (`txtOwnerId`: `jobradar-aws` vs `jobradar-gcp`) so each cluster only manages its own records.
+4. **TXT records** (`cname-debugpilot...`) record ownership (`txtOwnerId`: `debugpilot-aws` vs `debugpilot-gcp`) so each cluster only manages its own records.
 
 ### AWS vs GCP record shapes
 
@@ -279,12 +285,12 @@ Always verify with:
 
 ```bash
 # AWS — compare Ingress vs DNS
-kubectl get ingress jobradar-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
-dig jobradar.manavmalavia.org CNAME +short
+kubectl get ingress debugpilot-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+dig debugpilot.manavmalavia.org CNAME +short
 
 # GCP
-kubectl get ingress jobradar-ingress -n default
-dig jobradar-gcp.manavmalavia.org +short
+kubectl get ingress debugpilot-ingress -n default
+dig debugpilot-gcp.manavmalavia.org +short
 ```
 
 ### Failover and recreation scenarios
@@ -294,10 +300,10 @@ dig jobradar-gcp.manavmalavia.org +short
 | Scenario | What goes wrong | What to do |
 |----------|-----------------|------------|
 | **EKS recreated** | New ELB hostname; Cloudflare still has **old** CNAME | Run destroy workflow (deletes Ingress first, waits for external-dns), or delete stale CNAMEs and restart external-dns |
-| **external-dns says “up to date” but DNS is wrong** | Records exist without matching TXT ownership from current cluster | Delete `jobradar` / `jobradar-grafana` / `jobradar-argocd` CNAMEs + `cname-jobradar*` TXT; restart external-dns deployment |
+| **external-dns says “up to date” but DNS is wrong** | Records exist without matching TXT ownership from current cluster | Delete `debugpilot` / `debugpilot-grafana` / `debugpilot-argocd` CNAMEs + `cname-debugpilot*` TXT; restart external-dns deployment |
 | **503 / NXDOMAIN** | DNS not pointing at live LB, or cert still issuing | Fix DNS first; wait for cert-manager; confirm pods Ready |
-| **Destroy AWS, keep GCP** | AWS records should disappear; GCP `jobradar-gcp*` unaffected | Confirm destroy workflow ran ingress cleanup; manually remove orphaned AWS records if needed |
-| **Both clouds up** | No conflict if hostnames stay prefixed (`jobradar` vs `jobradar-gcp`) | Do not reuse the same hostname across clusters |
+| **Destroy AWS, keep GCP** | AWS records should disappear; GCP `debugpilot-gcp*` unaffected | Confirm destroy workflow ran ingress cleanup; manually remove orphaned AWS records if needed |
+| **Both clouds up** | No conflict if hostnames stay prefixed (`debugpilot` vs `debugpilot-gcp`) | Do not reuse the same hostname across clusters |
 
 ### Destroy-time DNS cleanup (AWS / GCP)
 
@@ -319,8 +325,8 @@ kubectl get ingress -A
 kubectl logs -n external-dns deployment/external-dns --tail=50
 
 # 3. Compare DNS
-dig jobradar.manavmalavia.org CNAME +short
-dig jobradar-gcp.manavmalavia.org +short
+dig debugpilot.manavmalavia.org CNAME +short
+dig debugpilot-gcp.manavmalavia.org +short
 
 # 4. If stale — delete wrong records in Cloudflare, then:
 kubectl rollout restart deployment/external-dns -n external-dns
@@ -385,7 +391,7 @@ Playbooks under `app/incidents/` are keyword-matched to ground the model in real
 ```
 ├── app/                    # FastAPI backend + playbooks
 ├── frontend/               # React UI
-├── charts/jobradar/        # Helm (values.yaml + values-gcp.yaml)
+├── charts/debugpilot/        # Helm (values.yaml + values-gcp.yaml)
 ├── k8s/ingress/aws|gcp/  # Per-cloud Ingress + TLS
 ├── terraform/aws|gcp/      # Multi-cloud IaC
 ├── .github/workflows/      # CI, Deploy, Terraform
@@ -457,10 +463,10 @@ Markdown guides in `app/incidents/`:
 | Symptom | Likely cause | Pointer |
 |---------|----------------|---------|
 | `Could not resolve host` | Stale Cloudflare CNAME | [DNS section](#-dns-external-dns-and-failover-behavior) |
-| **503** from nginx | No ready endpoints | `kubectl get pods -l app=jobradar-api` |
+| **503** from nginx | No ready endpoints | `kubectl get pods -l app=debugpilot-api` |
 | Argo CD **OutOfSync** | Git vs cluster drift | Sync in UI; check repo path |
 | CORS / localhost from live site | Old frontend bundle | Use current `main` (same-origin API) |
-| GCP works, AWS doesn’t | Separate hostnames / records | Verify `jobradar` vs `jobradar-gcp` records independently |
+| GCP works, AWS doesn’t | Separate hostnames / records | Verify `debugpilot` vs `debugpilot-gcp` records independently |
 
 ---
 

@@ -8,22 +8,22 @@ Mirrors the AWS EKS stack: GKE, Artifact Registry, ingress-nginx, external-dns (
 
 | Service | URL |
 |---------|-----|
-| API | https://jobradar-gcp.manavmalavia.org |
-| Grafana | https://jobradar-gcp-grafana.manavmalavia.org |
-| ArgoCD | https://jobradar-gcp-argocd.manavmalavia.org |
+| API | https://debugpilot-gcp.manavmalavia.org |
+| Grafana | https://debugpilot-gcp-grafana.manavmalavia.org |
+| ArgoCD | https://debugpilot-gcp-argocd.manavmalavia.org |
 
 ## Prerequisites
 
 ```bash
 gcloud auth login
-gcloud config set project jobradar-497223
+gcloud config set project YOUR_GCP_PROJECT_ID
 gcloud auth application-default login
 
 gcloud services enable container.googleapis.com artifactregistry.googleapis.com compute.googleapis.com
 
 # Remote state bucket (once)
-gcloud storage buckets create gs://jobradar-terraform-state-497223 \
-  --project=jobradar-497223 --location=us-central1 --uniform-bucket-level-access
+gcloud storage buckets create gs://debugpilot-terraform-state-PROJECT_NUMBER \
+  --project=YOUR_GCP_PROJECT_ID --location=us-central1 --uniform-bucket-level-access
 ```
 
 ## Local apply
@@ -41,8 +41,8 @@ terraform apply
 ## Verify
 
 ```bash
-gcloud container clusters get-credentials jobradar \
-  --region us-central1 --project jobradar-497223
+gcloud container clusters get-credentials debugpilot \
+  --region us-central1 --project YOUR_GCP_PROJECT_ID
 
 kubectl get nodes
 kubectl get pods -A

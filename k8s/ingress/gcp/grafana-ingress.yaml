@@ -6,16 +6,16 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    external-dns.alpha.kubernetes.io/hostname: jobradar-gcp-grafana.manavmalavia.org
+    external-dns.alpha.kubernetes.io/hostname: debugpilot-gcp-grafana.manavmalavia.org
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - jobradar-gcp-grafana.manavmalavia.org
-      secretName: jobradar-gcp-grafana-tls
+        - debugpilot-gcp-grafana.manavmalavia.org
+      secretName: debugpilot-gcp-grafana-tls
   rules:
-    - host: jobradar-gcp-grafana.manavmalavia.org
+    - host: debugpilot-gcp-grafana.manavmalavia.org
       http:
         paths:
           - path: /

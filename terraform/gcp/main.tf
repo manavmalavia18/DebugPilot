@@ -87,7 +87,7 @@ resource "helm_release" "external_dns" {
       ]
 
       policy     = "sync"
-      txtOwnerId = "jobradar-gcp"
+      txtOwnerId = "debugpilot-gcp"
 
       # The external-dns chart rendered invalid probe fields with enabled=false.
       # Null removes the probes and prevents the GKE pod from being killed by /healthz failures.
@@ -206,7 +206,7 @@ resource "null_resource" "ingress_rules" {
     command = <<-EOT
       sleep 30
       kubectl apply -f ${path.module}/../../k8s/ingress/gcp/cluster-issuer.yaml
-      kubectl apply -f ${path.module}/../../k8s/ingress/gcp/jobradar-ingress.yaml
+      kubectl apply -f ${path.module}/../../k8s/ingress/gcp/debugpilot-ingress.yaml
       kubectl apply -f ${path.module}/../../k8s/ingress/gcp/grafana-ingress.yaml
       kubectl apply -f ${path.module}/../../k8s/ingress/gcp/argocd-ingress.yaml
     EOT
@@ -247,14 +247,14 @@ resource "null_resource" "argocd_app" {
       apiVersion: argoproj.io/v1alpha1
       kind: Application
       metadata:
-        name: jobradar
+        name: debugpilot
         namespace: argocd
       spec:
         project: default
         source:
           repoURL: https://github.com/manavmalavia18/JobTracker
           targetRevision: HEAD
-          path: charts/jobradar
+          path: charts/debugpilot
           helm:
             valueFiles:
               - values-gcp.yaml

@@ -84,7 +84,7 @@ resource "helm_release" "external_dns" {
 
       policy = "sync"
 
-      txtOwnerId = "jobradar-aws"
+      txtOwnerId = "debugpilot-aws"
 
       env = [
         {
@@ -161,7 +161,7 @@ resource "null_resource" "ingress_rules" {
     command = <<-EOT
       sleep 30
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/cluster-issuer.yaml
-      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/jobradar-ingress.yaml
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/debugpilot-ingress.yaml
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/grafana-ingress.yaml
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/argocd-ingress.yaml
     EOT
@@ -198,14 +198,14 @@ resource "null_resource" "argocd_app" {
       apiVersion: argoproj.io/v1alpha1
       kind: Application
       metadata:
-        name: jobradar
+        name: debugpilot
         namespace: argocd
       spec:
         project: default
         source:
           repoURL: https://github.com/manavmalavia18/JobTracker
           targetRevision: HEAD
-          path: charts/jobradar
+          path: charts/debugpilot
         destination:
           server: https://kubernetes.default.svc
           namespace: default

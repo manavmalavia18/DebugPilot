@@ -1,0 +1,9 @@
+api:
+  # Project ID must match GitHub secret GCP_PROJECT_ID (set after foundation apply)
+  image: us-central1-docker.pkg.dev/REPLACE_GCP_PROJECT/debugpilot/debugpilot-api:latest
+  replicas: 1
+  port: 8000
+  imagePullPolicy: Always
+  serviceType: ClusterIP
+  anthropicSecretName: debugpilot-secrets
+  anthropicSecretKey: ANTHROPIC_API_KEY

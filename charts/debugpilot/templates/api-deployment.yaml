@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: jobradar-api
+  name: debugpilot-api
 spec:
   replicas: {{ .Values.api.replicas }}
   selector:
     matchLabels:
-      app: jobradar-api
+      app: debugpilot-api
   template:
     metadata:
       labels:
-        app: jobradar-api
+        app: debugpilot-api
     spec:
       containers:
-        - name: jobradar-api
+        - name: debugpilot-api
           image: {{ .Values.api.image }}
           imagePullPolicy: {{ .Values.api.imagePullPolicy }}
           ports:

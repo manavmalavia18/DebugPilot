@@ -9,13 +9,13 @@ provider "aws" {
 }
 
 resource "aws_ecr_repository" "api" {
-  name                 = "jobradar-api"
+  name                 = "debugpilot-api"
   image_tag_mutability = "MUTABLE"
   force_delete         = false
   image_scanning_configuration { scan_on_push = true }
   tags = {
-    Name    = "jobradar-api"
-    Project = "jobradar"
+    Name    = "debugpilot-api"
+    Project = "debugpilot"
   }
 
   lifecycle {

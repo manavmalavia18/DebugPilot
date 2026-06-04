@@ -1,5 +1,5 @@
-gcp_project_id       = "jobradar-497223"
+gcp_project_id       = "your-gcp-project-id"
 gcp_region           = "us-central1"
 cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN"
-argocd_password      = "jobradar123"
+argocd_password      = "debugpilot123"
 api_image_tag        = "latest"
