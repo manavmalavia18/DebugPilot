@@ -1,4 +1,4 @@
-name: Terraform AWS Bootstrap
+name: Terraform AWS Foundation
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
           - apply
 
 jobs:
-  terraform:
+  aws-foundation:
     runs-on: ubuntu-latest
     defaults:
       run:

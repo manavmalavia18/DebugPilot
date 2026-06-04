@@ -1,5 +1,6 @@
+<h1 align="center">DebugPilot</h1>
+
 <p align="center">
-  <strong>DebugPilot</strong><br/>
   <em>AI-powered DevOps incident debugger — paste infra logs, get root cause, safe commands, and fixes.</em>
 </p>
 
@@ -165,7 +166,7 @@ You can run **one cloud or both**; destroying AWS does not remove GCP DNS record
 ### Greenfield after the rename (your flow)
 
 1. Merge this branch, then create **new** remote state buckets matching `terraform/*/backend.tf` (`debugpilot-terraform-state-…`).
-2. **AWS:** run `Terraform AWS Bootstrap` → apply (ECR `debugpilot-api`), then `Terraform AWS` → apply (new EKS cluster `debugpilot`).
+2. **AWS:** run `Terraform AWS Foundation` → apply (ECR `debugpilot-api`), then `Terraform AWS Cluster` → apply (new EKS cluster `debugpilot`).
 3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, fix `charts/debugpilot/values-gcp.yaml` image project to your `GCP_PROJECT_ID`, then `Terraform GCP` → apply.
 4. Push to `main` so CI builds and tags `debugpilot-api` in both registries.
 5. Delete stale Cloudflare `jobradar*` records; point the Argo CD GitHub webhook at `debugpilot-argocd` (and GCP equivalent) if used.
@@ -307,7 +308,7 @@ dig debugpilot-gcp.manavmalavia.org +short
 
 ### Destroy-time DNS cleanup (AWS / GCP)
 
-**Terraform AWS → destroy** and **Terraform GCP → destroy** run a pre-step:
+**Terraform AWS Cluster → destroy** and **Terraform GCP Cluster → destroy** run a pre-step:
 
 1. `kubectl delete -f k8s/ingress/{aws|gcp}/...` (app, Grafana, Argo CD ingresses)
 2. Wait ~90s for external-dns to **delete** Cloudflare records
@@ -435,10 +436,10 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 |----------|---------|---------|
 | **CI** | Push / PR → `main` | Test, ruff, Helm lint, build & push image, update `values.yaml` |
 | **Deploy** | Manual | Optional rollout / image patch (Argo CD–managed clusters) |
-| **Terraform AWS** | Manual | plan / apply / destroy EKS |
-| **Terraform AWS Bootstrap** | Manual | ECR |
-| **Terraform GCP** | Manual | plan / apply / destroy GKE |
+| **Terraform AWS Foundation** | Manual | ECR |
+| **Terraform AWS Cluster** | Manual | plan / apply / destroy EKS |
 | **Terraform GCP Foundation** | Manual | Artifact Registry + state |
+| **Terraform GCP Cluster** | Manual | plan / apply / destroy GKE |
 
 ---
 

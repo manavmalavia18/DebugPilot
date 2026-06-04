@@ -12,7 +12,7 @@ on:
           - apply
 
 jobs:
-  terraform:
+  gcp-foundation:
     runs-on: ubuntu-latest
     defaults:
       run:
