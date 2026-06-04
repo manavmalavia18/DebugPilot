@@ -1,9 +1,0 @@
-api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/jobradar-api:4970b2240a6e3ae66fe45fc4dd1e7e2472459d77
-  replicas: 1
-  port: 8000
-  nodePort: 30080
-  imagePullPolicy: Always
-  serviceType: ClusterIP
-  anthropicSecretName: debugpilot-secrets
-  anthropicSecretKey: ANTHROPIC_API_KEY

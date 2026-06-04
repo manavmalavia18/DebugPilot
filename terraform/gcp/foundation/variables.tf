@@ -1,6 +1,6 @@
 variable "gcp_project_id" {
-  type    = string
-  default = "jobradar-497223"
+  type        = string
+  description = "GCP project ID (set via TF_VAR_gcp_project_id / GitHub GCP_PROJECT_ID)"
 }
 
 variable "gcp_region" {
@@ -10,5 +10,5 @@ variable "gcp_region" {
 
 variable "project_name" {
   type    = string
-  default = "jobradar"
+  default = "debugpilot"
 }

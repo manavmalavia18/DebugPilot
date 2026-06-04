@@ -9,7 +9,7 @@ variable "gcp_region" {
 
 variable "project_name" {
   type    = string
-  default = "jobradar"
+  default = "debugpilot"
 }
 
 variable "machine_type" {
@@ -35,7 +35,7 @@ variable "node_count_max" {
 variable "grafana_password" {
   type      = string
   sensitive = true
-  default   = "jobradar123"
+  default   = "debugpilot123"
 }
 
 variable "cloudflare_api_token" {
@@ -48,10 +48,10 @@ variable "domain_name" {
   default = "manavmalavia.org"
 }
 
-# API host: jobradar-gcp.manavmalavia.org (isolated from AWS jobradar.manavmalavia.org)
+# API host: debugpilot-gcp.manavmalavia.org (isolated from AWS debugpilot.manavmalavia.org)
 variable "hostname_prefix" {
   type    = string
-  default = "jobradar-gcp"
+  default = "debugpilot-gcp"
 }
 
 variable "anthropic_api_key" {
@@ -64,7 +64,7 @@ variable "anthropic_api_key" {
 variable "argocd_password" {
   type      = string
   sensitive = true
-  default   = "jobradar123"
+  default   = "debugpilot123"
 }
 
 variable "argocd_password_bcrypt" {
@@ -76,5 +76,5 @@ variable "argocd_password_bcrypt" {
 variable "api_image_tag" {
   type        = string
   default     = "latest"
-  description = "Artifact Registry tag for jobradar-api (override after CI push)"
+  description = "Artifact Registry tag for debugpilot-api (override after CI push)"
 }

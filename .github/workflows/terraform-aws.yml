@@ -40,10 +40,10 @@ jobs:
 
       - name: Update kubeconfig if cluster exists
         run: |
-          if aws eks describe-cluster --region ${{ secrets.AWS_REGION }} --name jobradar >/dev/null 2>&1; then
+          if aws eks describe-cluster --region ${{ secrets.AWS_REGION }} --name debugpilot >/dev/null 2>&1; then
             aws eks update-kubeconfig \
               --region ${{ secrets.AWS_REGION }} \
-              --name jobradar
+              --name debugpilot
           else
             echo "EKS cluster does not exist yet. Skipping kubeconfig update."
           fi
@@ -71,7 +71,7 @@ jobs:
           if kubectl get ns >/dev/null 2>&1; then
             echo "Deleting AWS ingress resources so ExternalDNS can remove Cloudflare records..."
 
-            kubectl delete -f k8s/ingress/aws/jobradar-ingress.yaml --ignore-not-found || true
+            kubectl delete -f k8s/ingress/aws/debugpilot-ingress.yaml --ignore-not-found || true
             kubectl delete -f k8s/ingress/aws/grafana-ingress.yaml --ignore-not-found || true
             kubectl delete -f k8s/ingress/aws/argocd-ingress.yaml --ignore-not-found || true
 

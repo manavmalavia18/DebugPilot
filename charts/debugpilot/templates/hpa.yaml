@@ -1,12 +1,12 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: jobradar-api
+  name: debugpilot-api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: jobradar-api
+    name: debugpilot-api
   minReplicas: 1
   maxReplicas: 5
   metrics:

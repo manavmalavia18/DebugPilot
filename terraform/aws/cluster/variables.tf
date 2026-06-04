@@ -9,7 +9,7 @@ variable "aws_account_id" {
 
 variable "project_name" {
   type    = string
-  default = "jobradar"
+  default = "debugpilot"
 }
 
 variable "cluster_version" {
@@ -40,7 +40,7 @@ variable "node_count_max" {
 variable "grafana_password" {
   type      = string
   sensitive = true
-  default   = "jobradar123"
+  default   = "debugpilot123"
 }
 
 
@@ -64,7 +64,7 @@ variable "anthropic_api_key" {
 variable "argocd_password" {
   type      = string
   sensitive = true
-  default   = "jobradar123"
+  default   = "debugpilot123"
 }
 
 

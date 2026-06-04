@@ -11,7 +11,7 @@ output "artifact_registry_url" {
 }
 
 output "api_image" {
-  value = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.project_name}/jobradar-api:${var.api_image_tag}"
+  value = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.project_name}/debugpilot-api:${var.api_image_tag}"
 }
 
 output "api_url" {
