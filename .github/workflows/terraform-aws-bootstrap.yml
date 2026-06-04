@@ -20,6 +20,7 @@ jobs:
 
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,13 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
+
+      - name: Adopt existing ECR/S3 if already in AWS
+        if: inputs.action == 'plan' || inputs.action == 'apply'
+        run: |
+          # Idempotent: skip when already in state or resource does not exist yet
+          terraform import aws_ecr_repository.api debugpilot-api 2>/dev/null || true
+          terraform import aws_s3_bucket.log_uploads "debugpilot-log-uploads-${AWS_ACCOUNT_ID}" 2>/dev/null || true
 
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
