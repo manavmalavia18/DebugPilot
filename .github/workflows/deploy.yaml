@@ -73,11 +73,19 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Deploy to EKS
+        env:
+          IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ steps.resolve_tag_aws.outputs.image_tag }}
         run: |
           echo "Deploying image tag: ${{ steps.resolve_tag_aws.outputs.image_tag }}"
-          helm upgrade --install jobradar ./charts/jobradar \
-            --set api.image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobradar-api:${{ steps.resolve_tag_aws.outputs.image_tag }} \
-            --set api.replicas=1
+          if helm status jobradar -n default >/dev/null 2>&1; then
+            helm upgrade --install jobradar ./charts/jobradar \
+              --set api.image="$IMAGE" \
+              --set api.replicas=1
+          else
+            echo "No Helm release — app is managed by ArgoCD. Patching deployment image..."
+            kubectl set image deployment/jobradar-api jobradar-api="$IMAGE"
+          fi
+          kubectl rollout restart deployment/jobradar-api
           kubectl rollout status deployment/jobradar-api --timeout=180s
           kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
 
@@ -144,12 +152,20 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Deploy to GKE
+        env:
+          IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ steps.resolve_tag_gcp.outputs.image_tag }}
         run: |
           echo "Deploying image tag: ${{ steps.resolve_tag_gcp.outputs.image_tag }}"
-          helm upgrade --install jobradar ./charts/jobradar \
-            -f charts/jobradar/values-gcp.yaml \
-            --set api.image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jobradar/jobradar-api:${{ steps.resolve_tag_gcp.outputs.image_tag }} \
-            --set api.replicas=1
+          if helm status jobradar -n default >/dev/null 2>&1; then
+            helm upgrade --install jobradar ./charts/jobradar \
+              -f charts/jobradar/values-gcp.yaml \
+              --set api.image="$IMAGE" \
+              --set api.replicas=1
+          else
+            echo "No Helm release — app is managed by ArgoCD. Patching deployment image..."
+            kubectl set image deployment/jobradar-api jobradar-api="$IMAGE"
+          fi
+          kubectl rollout restart deployment/jobradar-api
           kubectl rollout status deployment/jobradar-api --timeout=180s
           kubectl wait --for=condition=ready pod -l app=jobradar-api --timeout=180s
 

@@ -88,7 +88,8 @@ Multi-cloud Kubernetes deployment with Terraform, Helm, ArgoCD, Prometheus, and 
 
 **Deploy workflow (manual):**
 - Syncs `ANTHROPIC_API_KEY` from GitHub secrets → `debugpilot-secrets` in cluster
-- Helm upgrade with built image (UI served from pod at `/`)
+- Restarts `jobradar-api` (and patches image if not managed by an existing Helm release)
+- App manifests are deployed by **ArgoCD** after Terraform apply; Deploy does not fight ArgoCD for ownership
 
 **Cluster lifecycle (AWS/GCP):**
 - **Destroy** — workflow deletes Ingress resources first so external-dns removes Cloudflare CNAMEs before the cluster is torn down
