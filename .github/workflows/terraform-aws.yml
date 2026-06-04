@@ -55,6 +55,19 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      - name: Import existing OIDC provider if present
+        if: inputs.action == 'plan' || inputs.action == 'apply'
+        run: |
+          OIDC_URL=$(aws eks describe-cluster \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name debugpilot \
+            --query 'cluster.identity.oidc.issuer' \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$OIDC_URL" ] && [ "$OIDC_URL" != "None" ]; then
+            OIDC_ID="${OIDC_URL#https://}"
+            terraform import aws_iam_openid_connect_provider.eks "$OIDC_ID" 2>/dev/null || true
+          fi
+
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
         run: |
