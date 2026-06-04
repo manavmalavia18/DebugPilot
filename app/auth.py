@@ -131,7 +131,12 @@ def set_session_cookie(response: Response, token: str) -> None:
 
 
 def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME, path="/")
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        secure=cookie_secure(),
+        samesite="lax",
+    )
 
 
 def decode_session_token(token: str) -> int:

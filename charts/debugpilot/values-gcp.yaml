@@ -13,3 +13,8 @@ api:
   redisUrl: redis://redis:6379/0
   publicBaseUrl: https://debugpilot-gcp.manavmalavia.org
   authCookieSecure: true
+  persistence:
+    enabled: true
+    size: 1Gi
+    mountPath: /app/data
+    databasePath: /app/data/debugpilot.db

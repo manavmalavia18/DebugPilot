@@ -28,20 +28,20 @@ export default function App() {
   const [uploadFilename, setUploadFilename] = useState("")
   const [uploading, setUploading] = useState(false)
 
-  const loadAuth = useCallback(async () => {
+  const loadAuth = useCallback(async ({ background = false } = {}) => {
     try {
       const configRes = await api.get("/auth/config")
       setAuthEnabled(Boolean(configRes.data.auth_enabled))
       const meRes = await api.get("/auth/me")
       setUser(meRes.data)
-    } catch (err) {
-      if (err.response?.status === 401) {
-        setUser(null)
-      } else {
-        setUser(null)
-      }
+      return true
+    } catch {
+      setUser(null)
+      return false
     } finally {
-      setAuthLoading(false)
+      if (!background) {
+        setAuthLoading(false)
+      }
     }
   }, [])
 
@@ -77,6 +77,19 @@ export default function App() {
   }, [loadAuth, checkHealth])
 
   useEffect(() => {
+    if (!authEnabled) return undefined
+
+    const syncSession = () => {
+      if (document.visibilityState === "visible") {
+        loadAuth({ background: true })
+      }
+    }
+
+    document.addEventListener("visibilitychange", syncSession)
+    return () => document.removeEventListener("visibilitychange", syncSession)
+  }, [authEnabled, loadAuth])
+
+  useEffect(() => {
     if (user) {
       loadHistory()
     } else {
@@ -102,7 +115,7 @@ export default function App() {
     } catch (err) {
       if (err.response?.status === 401) {
         setUser(null)
-        setError("Sign in required to analyze logs.")
+        setError("Your session expired. Sign in again to analyze logs.")
       } else {
         setError(err.response?.data?.detail || err.message || "Analysis failed")
       }
@@ -147,6 +160,13 @@ export default function App() {
     const form = new FormData()
     form.append("file", file)
     try {
+      if (authEnabled) {
+        const sessionOk = await loadAuth({ background: true })
+        if (!sessionOk) {
+          setAuthError("Your session expired. Sign in again to upload logs.")
+          return
+        }
+      }
       const res = await api.post("/uploads", form)
       setLogText(res.data.log_text)
       setUploadId(res.data.id)
@@ -154,7 +174,7 @@ export default function App() {
     } catch (err) {
       if (err.response?.status === 401) {
         setUser(null)
-        setError("Sign in required to upload logs.")
+        setAuthError("Your session expired. Sign in again to upload logs.")
       } else {
         setError(err.response?.data?.detail || err.message || "Upload failed")
       }
