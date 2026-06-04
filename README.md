@@ -478,10 +478,10 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 |--------|---------|
 | `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
 | `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
-| `GITHUB_OAUTH_CLIENT_ID_AWS` | GitHub OAuth App for **AWS** hostname (Terraform AWS Cluster) |
-| `GITHUB_OAUTH_CLIENT_SECRET_AWS` | OAuth secret for AWS |
-| `GITHUB_OAUTH_CLIENT_ID_GCP` | GitHub OAuth App for **GCP** hostname (Terraform GCP Cluster) |
-| `GITHUB_OAUTH_CLIENT_SECRET_GCP` | OAuth secret for GCP |
+| `DEBUGPILOT_OAUTH_CLIENT_ID_AWS` | OAuth Client ID for **AWS** (`debugpilot.manavmalavia.org`) |
+| `DEBUGPILOT_OAUTH_CLIENT_SECRET_AWS` | OAuth client secret for AWS |
+| `DEBUGPILOT_OAUTH_CLIENT_ID_GCP` | OAuth Client ID for **GCP** (`debugpilot-gcp.manavmalavia.org`) |
+| `DEBUGPILOT_OAUTH_CLIENT_SECRET_GCP` | OAuth client secret for GCP |
 | `JWT_SECRET` | Session cookie signing — **same value on both clouds** (`openssl rand -hex 32`) |
 
 ### GitHub sign-in (abuse protection)
@@ -497,7 +497,7 @@ GitHub OAuth Apps allow **one callback URL per app**, so use **two OAuth Apps** 
 | **Local** | `http://localhost:8000/auth/github/callback` | `.env` / `PUBLIC_BASE_URL` |
 
 1. Create [GitHub OAuth Apps](https://github.com/settings/developers) (**OAuth App**, not GitHub App). **Do not enable device flow.**
-2. Add repo secrets: `GITHUB_OAUTH_CLIENT_ID_AWS`, `GITHUB_OAUTH_CLIENT_SECRET_AWS`, `GITHUB_OAUTH_CLIENT_ID_GCP`, `GITHUB_OAUTH_CLIENT_SECRET_GCP`, `JWT_SECRET`.
+2. Add repo secrets: `DEBUGPILOT_OAUTH_CLIENT_ID_AWS`, `DEBUGPILOT_OAUTH_CLIENT_SECRET_AWS`, `DEBUGPILOT_OAUTH_CLIENT_ID_GCP`, `DEBUGPILOT_OAUTH_CLIENT_SECRET_GCP`, `JWT_SECRET`. (Names cannot start with `GITHUB` — that prefix is reserved by GitHub Actions.)
 3. Run **Terraform AWS Cluster** and **Terraform GCP Cluster** apply (each writes OAuth keys into that cluster’s `debugpilot-secrets`), or patch manually:
 
    ```bash

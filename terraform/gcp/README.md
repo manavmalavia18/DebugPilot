@@ -31,7 +31,7 @@ gcloud storage buckets create gs://debugpilot-terraform-state-PROJECT_NUMBER \
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your Cloudflare token
-# Optional: argocd_github_webhook_secret, github_client_id/secret (GITHUB_OAUTH_CLIENT_ID_GCP in Actions), jwt_secret
+# Optional: argocd_github_webhook_secret, DEBUGPILOT_OAUTH_CLIENT_ID_GCP / _SECRET_GCP in Actions, jwt_secret
 
 cd terraform/gcp
 terraform init
