@@ -4,277 +4,409 @@
 </p>
 
 <p align="center">
-  <a href="https://jobradar.manavmalavia.org">Live demo</a> ·
-  <a href="#-run-it-locally-in-5-minutes-recruiter-quick-start">Quick start</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-api-reference">API</a>
+  <a href="https://jobradar.manavmalavia.org">AWS demo</a> ·
+  <a href="https://jobradar-gcp.manavmalavia.org">GCP demo</a> ·
+  <a href="#-quick-start-local">Local setup</a> ·
+  <a href="#-multi-cloud-infrastructure">Multi-cloud</a> ·
+  <a href="#-dns-external-dns-and-failover-behavior">DNS</a>
 </p>
 
 ---
 
 ## Table of contents
 
-- [What is this?](#-what-is-this)
-- [Run it locally in 5 minutes (recruiter quick start)](#-run-it-locally-in-5-minutes-recruiter-quick-start)
-- [What you get when you analyze a log](#-what-you-get-when-you-analyze-a-log)
+- [Overview](#-overview)
 - [Tech stack](#-tech-stack)
+- [Multi-cloud infrastructure](#-multi-cloud-infrastructure)
 - [Architecture](#-architecture)
-- [How deployment works (GitOps)](#-how-deployment-works-gitops)
+- [How deployment works](#-how-deployment-works)
+- [DNS, external-dns, and failover behavior](#-dns-external-dns-and-failover-behavior)
+- [Quick start (local)](#-quick-start-local)
+- [What an analysis returns](#-what-an-analysis-returns)
 - [Project layout](#-project-layout)
-- [Local development (all options)](#-local-development-all-options)
+- [Local development](#-local-development)
 - [API reference](#-api-reference)
-- [Production & infrastructure](#-production--infrastructure)
-- [GitHub Actions workflows](#-github-actions-workflows)
+- [GitHub Actions](#-github-actions)
+- [Operational runbooks](#-operational-runbooks)
 - [Troubleshooting](#-troubleshooting)
 - [Author](#-author)
 
 ---
 
-## What is this?
+## Overview
 
-**DebugPilot** is a full-stack app that helps you debug real infrastructure failures. Paste a log snippet from Kubernetes, Terraform, GitHub Actions, or Docker — Claude returns a structured diagnosis grounded in **playbooks** written from actual production incidents (Redis on localhost in K8s, ImagePullBackOff, Ingress 503, Terraform state lock, and more).
+**DebugPilot** is a full-stack application for debugging infrastructure failures. Paste logs from **Kubernetes**, **Terraform**, **GitHub Actions**, or **Docker** and receive a structured diagnosis from **Claude**, enriched by markdown **playbooks** in `app/incidents/` (real incidents from multi-cloud deployments: Redis in K8s, ImagePullBackOff, Ingress 503, Terraform state lock, external-dns stale CNAME, and more).
 
-| Layer | What it demonstrates |
-|--------|----------------------|
-| **Application** | FastAPI + React, Claude API, SQLite history, Prometheus metrics |
-| **Platform** | Multi-cloud Terraform (AWS EKS + GCP GKE), Helm, Argo CD GitOps |
-| **Delivery** | GitHub Actions CI/CD, ECR/GAR images, external-dns, cert-manager, webhooks |
+The repository is both a **product** and a **platform showcase**: the same Helm chart and CI pipeline can run on **AWS EKS** or **GCP GKE**, with isolated DNS hostnames per cloud.
 
-**Live URLs** (when the AWS cluster is up):
+| Layer | Responsibility |
+|--------|----------------|
+| **Application** | FastAPI API, React ops UI, SQLite history, Prometheus metrics |
+| **Packaging** | Helm chart `charts/jobradar`, multi-stage Docker image |
+| **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD |
+| **GCP** | GKE, Artifact Registry, same platform components, separate hostnames |
+| **Delivery** | GitHub Actions CI, GitOps sync, optional GitHub → Argo CD webhook |
 
-| Service | URL |
-|---------|-----|
-| App | https://jobradar.manavmalavia.org |
-| Grafana | https://jobradar-grafana.manavmalavia.org |
-| ArgoCD | https://jobradar-argocd.manavmalavia.org |
-
-> Infra resource names still use the `jobradar` prefix from the original project; the product is **DebugPilot**.
-
----
-
-## Run it locally in 5 minutes (recruiter quick start)
-
-No Kubernetes required. You only need **Python 3.12**, **Node 22**, and an **Anthropic API key**.
-
-### 1. Clone and configure
-
-```bash
-git clone https://github.com/manavmalavia18/JobTracker.git
-cd JobTracker
-cp .env.example .env
-```
-
-Open `.env` and set your key:
-
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-### 2. Start everything
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-This script:
-
-- Creates a Python venv and installs dependencies
-- Starts the API on **http://127.0.0.1:8000**
-- Starts the UI on **http://127.0.0.1:5173** (hot reload)
-
-### 3. Try it
-
-1. Open **http://localhost:5173**
-2. Pick a **sample log** (Kubernetes, Terraform, GitHub Actions, Docker)
-3. Click **Analyze**
-4. Review root cause, debug commands, fix steps, and confidence level
-
-**API-only check:**
-
-```bash
-curl http://localhost:8000/health
-# {"status":"ok","service":"debugpilot"}
-
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"log_text":"Error: ImagePullBackOff","source_hint":"kubernetes","save":true}'
-```
-
-**Stop:** `Ctrl+C` in the terminal running `start.sh`.
-
-### Prerequisites checklist
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Python | 3.12+ | [python.org](https://www.python.org/downloads/) |
-| Node.js | 22+ | [nodejs.org](https://nodejs.org/) |
-| Anthropic API key | — | [console.anthropic.com](https://console.anthropic.com/) |
-
-Optional: `docker compose up --build` if you prefer Docker (requires `.env`).
-
----
-
-## What you get when you analyze a log
-
-The UI returns a structured ops-style report:
-
-- **Category** — kubernetes, terraform, github_actions, docker, app, unknown
-- **Symptom** — one-line summary
-- **What failed** — component or step
-- **Root cause** — plain-English explanation
-- **Confidence** — high / medium / low
-- **Debug commands** — read-only first; destructive ones flagged in warnings
-- **Likely fix** — concrete remediation steps
-- **Prevention** — how to avoid repeat incidents
-
-Analyses can be **saved** to SQLite and browsed in the **History** tab.
-
-Built-in playbooks live in `app/incidents/` and are matched by keywords before/alongside the LLM call.
+> Kubernetes and Helm release names use the `jobradar` prefix; the application brand is **DebugPilot**.
 
 ---
 
 ## Tech stack
 
-| Area | Technologies |
-|------|----------------|
-| **Backend** | Python 3.12, FastAPI, SQLModel, SQLite, Anthropic Claude (`claude-sonnet-4-5`) |
-| **Frontend** | React 19, Vite, Tailwind CSS 4, Axios |
-| **Observability** | Prometheus metrics (`/metrics`), kube-prometheus-stack in cluster |
-| **Containers** | Multi-stage Dockerfile (Node build → Python slim) |
-| **AWS** | EKS, ECR, VPC, external-dns → Cloudflare, cert-manager, ingress-nginx |
-| **GCP** | GKE, Artifact Registry (optional second cloud) |
-| **IaC** | Terraform (bootstrap + cluster split) |
-| **GitOps** | Argo CD + Helm chart `charts/jobradar` |
-| **CI/CD** | GitHub Actions — test, lint, build, push, update image tag in git |
+### Application layer
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| API | **Python 3.12**, **FastAPI** | REST endpoints, OpenAPI, static UI in production |
+| AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
+| Persistence | **SQLModel**, **SQLite** (`debugpilot.db`) | Saved incident history |
+| Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
+| UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
+| HTTP client | **Axios** | Same-origin API in prod; `VITE_API_URL` for local dev |
+| Testing | **pytest**, **ruff** | API tests and lint in CI |
+
+### Container & build
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| Image | **Multi-stage Dockerfile** | Stage 1: `npm run build` → Stage 2: Python slim + `frontend/dist` |
+| Registries | **AWS ECR**, **GCP Artifact Registry** | Same image tag pushed to both on `main` |
+| Local | **docker-compose**, **start.sh** | Optional container or scripted dev environment |
+
+### AWS platform (EKS)
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| Compute | **Amazon EKS 1.34**, managed node group (`t3.small`) | Kubernetes control plane and workers |
+| Network | **VPC** (public subnets), **Internet Gateway** | Cluster networking |
+| Registry | **ECR** `jobradar-api` | Container images (bootstrap stack) |
+| Ingress | **ingress-nginx** (NLB/ELB) | HTTP/S routing to services |
+| DNS | **external-dns** + **Cloudflare** provider | Syncs Ingress hostnames → Cloudflare records |
+| TLS | **cert-manager**, Let's Encrypt (`letsencrypt-prod`) | TLS secrets per hostname |
+| GitOps | **Argo CD** | Syncs `charts/jobradar` from GitHub `main` |
+| Observability | **kube-prometheus-stack** | Prometheus + Grafana |
+| IaC | **Terraform** (`terraform/aws/bootstrap`, `terraform/aws/cluster`) | Bootstrap vs cluster state split |
+
+### GCP platform (GKE)
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| Compute | **Google GKE**, regional cluster | Parallel stack to AWS |
+| Registry | **Artifact Registry** `jobradar/jobradar-api` | Same CI image tags as ECR |
+| Network | **VPC** module (`terraform/gcp/modules/network`) | GKE networking |
+| Ingress / DNS / TLS | Same pattern as AWS | **Different hostnames** (see below) |
+| GitOps | **Argo CD** with `values-gcp.yaml` | Same chart, GCP-specific image registry path |
+| IaC | **Terraform** (`terraform/gcp/foundation`, `terraform/gcp`) | Foundation (GAR, state) + cluster |
+
+### CI/CD & GitOps
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| CI | **GitHub Actions** | Test, lint, Helm validate, buildx push amd64+arm64 |
+| GitOps | **Argo CD** automated sync + self-heal | Cluster follows `charts/jobradar` on `main` |
+| Webhook | **GitHub → `/api/webhook`** | Near-instant refresh on push (vs ~3 min poll) |
+| Deploy workflow | Manual dispatch | Optional rollout / image patch when not using Helm release |
+
+---
+
+## Multi-cloud infrastructure
+
+DebugPilot is designed to run in **either** cloud without changing application code. Terraform and ingress manifests are **split by cloud** so AWS and GCP can coexist in the same Cloudflare zone without overwriting each other.
+
+### Live endpoints
+
+| Service | AWS (EKS) | GCP (GKE) |
+|---------|-----------|-----------|
+| **API** | https://jobradar.manavmalavia.org | https://jobradar-gcp.manavmalavia.org |
+| **Grafana** | https://jobradar-grafana.manavmalavia.org | https://jobradar-gcp-grafana.manavmalavia.org |
+| **Argo CD** | https://jobradar-argocd.manavmalavia.org | https://jobradar-gcp-argocd.manavmalavia.org |
+
+### Isolation strategy
+
+| Concern | AWS | GCP |
+|---------|-----|-----|
+| Terraform path | `terraform/aws/` | `terraform/gcp/` |
+| Ingress manifests | `k8s/ingress/aws/` | `k8s/ingress/gcp/` |
+| external-dns `txtOwnerId` | `jobradar-aws` | `jobradar-gcp` |
+| DNS record prefix | `jobradar`, `jobradar-grafana`, … | `jobradar-gcp`, `jobradar-gcp-grafana`, … |
+| Image registry | ECR | Artifact Registry |
+| Helm values file | `charts/jobradar/values.yaml` | `charts/jobradar/values-gcp.yaml` |
+
+CI pushes **one build** to **both** registries; each cluster’s Argo CD Application points at the registry and values file for that cloud.
+
+### Terraform layout
+
+```
+terraform/
+├── aws/
+│   ├── bootstrap/          # ECR repository (long-lived)
+│   └── cluster/            # VPC, EKS, Helm: ingress, external-dns, cert-manager,
+│                           # monitoring, Argo CD, ingress YAML apply, Argo Application
+└── gcp/
+    ├── foundation/         # Artifact Registry, remote state bucket setup
+    └── main.tf             # Network, GKE, same Helm platform pattern
+```
+
+### Typical bring-up order
+
+**AWS**
+
+1. `Terraform AWS Bootstrap` → ECR  
+2. Merge to `main` → CI builds image and updates `values.yaml`  
+3. `Terraform AWS` → **apply** → EKS + platform + Argo CD Application  
+4. Verify DNS and `curl https://jobradar.manavmalavia.org/health`
+
+**GCP** (optional second region/cloud)
+
+1. `Terraform GCP Foundation` → Artifact Registry + state  
+2. `Terraform GCP` → **apply** → GKE + platform  
+3. Verify https://jobradar-gcp.manavmalavia.org  
+
+You can run **one cloud or both**; destroying AWS does not remove GCP DNS records (separate `txtOwnerId` and hostnames).
 
 ---
 
 ## Architecture
 
-### Application (logical)
+### Application flow
 
 ```mermaid
 flowchart LR
-  UI[React UI] --> API[FastAPI]
-  API --> AI[Claude API]
-  API --> DB[(SQLite)]
-  API --> PB[Incident playbooks]
-  PB --> AI
+  subgraph client [Client]
+    UI[React UI]
+  end
+  subgraph api [FastAPI]
+    Routes[REST + static dist]
+    Analyzer[analyzer.py]
+    Playbooks[incidents/*.md]
+    AI[ai.py → Claude]
+    DB[(SQLite)]
+  end
+  UI --> Routes
+  Routes --> Analyzer
+  Analyzer --> Playbooks
+  Analyzer --> AI
+  Analyzer --> DB
 ```
 
-### Production (AWS)
+### Multi-cloud traffic (simplified)
 
 ```mermaid
 flowchart TB
-  User[Browser] --> DNS[Cloudflare DNS]
-  DNS --> LB[AWS Load Balancer]
-  LB --> NGINX[ingress-nginx]
-  NGINX --> Pod[DebugPilot pod]
-  Pod --> Claude[Anthropic API]
-  GH[GitHub] --> CI[CI workflow]
-  CI --> ECR[ECR image]
-  CI --> Git[values.yaml on main]
-  Git --> Argo[Argo CD]
-  Argo --> Pod
-  TF[Terraform apply] --> EKS[EKS cluster]
-  TF --> Secret[debugpilot-secrets]
+  subgraph users [Users]
+    U[Browser]
+  end
+  subgraph dns [Cloudflare DNS]
+    AWSrec[jobradar.* records]
+    GCPrec[jobradar-gcp.* records]
+  end
+  subgraph aws [AWS EKS]
+    AWSlb[NLB / ELB]
+    AWSing[ingress-nginx]
+    AWSpod[DebugPilot pod]
+  end
+  subgraph gcp [GCP GKE]
+    GCPlb[Cloud LB]
+    GCPing[ingress-nginx]
+    GCPpod[DebugPilot pod]
+  end
+  U --> AWSrec --> AWSlb --> AWSing --> AWSpod
+  U --> GCPrec --> GCPlb --> GCPing --> GCPpod
 ```
 
 ---
 
-## How deployment works (GitOps)
+## How deployment works
 
-Plain-language flow:
+```
+┌─────────────┐     push to main      ┌──────────────┐
+│  Developer  │ ───────────────────►  │  GitHub CI   │
+└─────────────┘                       │  test, build │
+                                      │  push ECR+GAR│
+                                      │  commit tag  │
+                                      └──────┬───────┘
+                                             │
+                    webhook (optional)       │  values.yaml
+                                             ▼
+                                      ┌──────────────┐
+                                      │   Argo CD    │
+                                      │  helm sync   │
+                                      └──────┬───────┘
+                                             ▼
+                                      ┌──────────────┐
+                                      │ jobradar-api │
+                                      │   pods       │
+                                      └──────────────┘
+```
 
-1. **You push to `main`** → CI runs tests, builds the Docker image, pushes to ECR, commits the new image tag to `charts/jobradar/values.yaml`.
-2. **GitHub webhook** → Argo CD sees the git change within seconds and syncs the Helm chart to the cluster.
-3. **Terraform apply** (manual, rare) → Creates EKS, ingress, DNS, TLS, monitoring, Argo CD, **`debugpilot-secrets`** from GitHub `ANTHROPIC_API_KEY`, and registers the Argo CD Application.
+| Phase | Tool | What happens |
+|-------|------|----------------|
+| **Build** | GitHub Actions CI | pytest, ruff, frontend build, Docker buildx, push to ECR + GAR |
+| **Config git** | CI bot commit | Updates `charts/jobradar/values.yaml` image digest on `main` |
+| **Sync** | Argo CD | Renders Helm chart → applies Deployment, Service, HPA, ServiceMonitor |
+| **Platform** | Terraform (manual) | Cluster, ingress controller, external-dns, cert-manager, Argo CD install |
+| **Edge** | Cloudflare + external-dns | Hostname → load balancer IP/CNAME per cloud |
 
-**Day-to-day:** push code → CI → Argo CD. **No manual Deploy** needed for normal releases.
+**Day-to-day:** push application changes to `main` — CI and Argo CD handle the rest. Re-run Terraform only for infrastructure changes.
 
-| Step | Who runs it | What happens |
-|------|-------------|----------------|
-| Build image | CI (automatic) | Docker → ECR + GAR |
-| Update git tag | CI (automatic) | `values.yaml` commit on `main` |
-| Deploy app | Argo CD (automatic) | Helm sync → new pods |
-| Create cluster | You → Terraform AWS | EKS + platform + secret |
-| Restart / key rotate | Optional Deploy workflow | Secret + rollout |
+---
+
+## DNS, external-dns, and failover behavior
+
+DNS is the **edge** of the system: users hit Cloudflare hostnames that must point at the **current** cloud load balancer. This project uses **external-dns** in each cluster to reconcile Ingress hosts into Cloudflare.
+
+### How records are created
+
+1. **ingress-nginx** provisions a cloud load balancer (AWS ELB/NLB or GCP forwarding rule).
+2. **Ingress** resources in `k8s/ingress/aws/` or `k8s/ingress/gcp/` annotate desired hostnames:
+
+   ```yaml
+   external-dns.alpha.kubernetes.io/hostname: jobradar.manavmalavia.org
+   external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+   ```
+
+3. **external-dns** (Helm release in cluster) watches Ingress objects and creates/updates **CNAME** (AWS) or **A** (GCP) records in Cloudflare.
+4. **TXT records** (`cname-jobradar...`) record ownership (`txtOwnerId`: `jobradar-aws` vs `jobradar-gcp`) so each cluster only manages its own records.
+
+### AWS vs GCP record shapes
+
+| Cloud | Typical record type | Points to |
+|-------|---------------------|-----------|
+| **AWS** | CNAME | `*.elb.amazonaws.com` hostname from Ingress status |
+| **GCP** | A | Static IP or LB IP for the GKE ingress |
+
+Always verify with:
+
+```bash
+# AWS — compare Ingress vs DNS
+kubectl get ingress jobradar-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+dig jobradar.manavmalavia.org CNAME +short
+
+# GCP
+kubectl get ingress jobradar-ingress -n default
+dig jobradar-gcp.manavmalavia.org +short
+```
+
+### Failover and recreation scenarios
+
+“Failover” here means **recovering correct DNS after infrastructure changes** — not automatic multi-cloud active-active failover between AWS and GCP (those are **parallel stacks**, not hot standby).
+
+| Scenario | What goes wrong | What to do |
+|----------|-----------------|------------|
+| **EKS recreated** | New ELB hostname; Cloudflare still has **old** CNAME | Run destroy workflow (deletes Ingress first, waits for external-dns), or delete stale CNAMEs and restart external-dns |
+| **external-dns says “up to date” but DNS is wrong** | Records exist without matching TXT ownership from current cluster | Delete `jobradar` / `jobradar-grafana` / `jobradar-argocd` CNAMEs + `cname-jobradar*` TXT; restart external-dns deployment |
+| **503 / NXDOMAIN** | DNS not pointing at live LB, or cert still issuing | Fix DNS first; wait for cert-manager; confirm pods Ready |
+| **Destroy AWS, keep GCP** | AWS records should disappear; GCP `jobradar-gcp*` unaffected | Confirm destroy workflow ran ingress cleanup; manually remove orphaned AWS records if needed |
+| **Both clouds up** | No conflict if hostnames stay prefixed (`jobradar` vs `jobradar-gcp`) | Do not reuse the same hostname across clusters |
+
+### Destroy-time DNS cleanup (AWS / GCP)
+
+**Terraform AWS → destroy** and **Terraform GCP → destroy** run a pre-step:
+
+1. `kubectl delete -f k8s/ingress/{aws|gcp}/...` (app, Grafana, Argo CD ingresses)
+2. Wait ~90s for external-dns to **delete** Cloudflare records
+3. `terraform destroy`
+
+This prevents **stale CNAMEs** pointing at deleted load balancers after cluster teardown.
+
+### Manual DNS recovery checklist
+
+```bash
+# 1. Confirm load balancer exists
+kubectl get ingress -A
+
+# 2. Check external-dns
+kubectl logs -n external-dns deployment/external-dns --tail=50
+
+# 3. Compare DNS
+dig jobradar.manavmalavia.org CNAME +short
+dig jobradar-gcp.manavmalavia.org +short
+
+# 4. If stale — delete wrong records in Cloudflare, then:
+kubectl rollout restart deployment/external-dns -n external-dns
+```
+
+Full playbook: [`app/incidents/external-dns-stale-cname.md`](app/incidents/external-dns-stale-cname.md)
+
+---
+
+## Quick start (local)
+
+Run the full product on your laptop — **no Kubernetes required**.
+
+### Prerequisites
+
+| Tool | Version |
+|------|---------|
+| Python | 3.12+ |
+| Node.js | 22+ |
+| Anthropic API key | [console.anthropic.com](https://console.anthropic.com/) |
+
+### Steps
+
+```bash
+git clone https://github.com/manavmalavia18/JobTracker.git
+cd JobTracker
+cp .env.example .env
+# Edit .env — set ANTHROPIC_API_KEY
+
+chmod +x start.sh
+./start.sh
+```
+
+- UI: http://localhost:5173  
+- API: http://localhost:8000  
+- Docs: http://localhost:8000/docs  
+
+Try a **sample log** in the UI, or:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Stop with `Ctrl+C` in the terminal running `start.sh`.
+
+---
+
+## What an analysis returns
+
+- **Category** — kubernetes, terraform, github_actions, docker, app, unknown  
+- **Symptom**, **what failed**, **root cause**, **confidence**  
+- **Debug commands** — prefer read-only; destructive steps listed in **warnings**  
+- **Likely fix**, **prevention** tips  
+- Optional **save** to history (SQLite)
+
+Playbooks under `app/incidents/` are keyword-matched to ground the model in real failure modes from this repo’s infra.
 
 ---
 
 ## Project layout
 
 ```
-JobTracker/
-├── app/                      # FastAPI backend
-│   ├── main.py               # Routes, static UI, metrics
-│   ├── ai.py                 # Claude prompts & API calls
-│   ├── analyzer.py           # Playbook matching + orchestration
-│   ├── models.py             # Pydantic / SQLModel schemas
-│   ├── database.py           # SQLite (debugpilot.db)
-│   └── incidents/            # Markdown playbooks (seed knowledge)
-├── frontend/                 # React ops console UI
-│   ├── src/components/       # Analyze, History, KPI cards, Sidebar
-│   └── src/data/samples.js   # Demo log snippets
-├── charts/jobradar/          # Helm chart (Deployment, Service, HPA, ServiceMonitor)
-├── k8s/ingress/              # AWS + GCP Ingress + TLS
-├── terraform/
-│   ├── aws/bootstrap/        # ECR repository
-│   ├── aws/cluster/          # EKS + platform Helm releases
-│   └── gcp/                  # GKE + foundation (optional)
-├── .github/workflows/        # CI, Deploy, Terraform
-├── tests/                    # pytest API tests
-├── Dockerfile                # Production image
-├── start.sh                  # Local dev entrypoint
-└── docker-compose.yaml       # Optional Docker local run
+├── app/                    # FastAPI backend + playbooks
+├── frontend/               # React UI
+├── charts/jobradar/        # Helm (values.yaml + values-gcp.yaml)
+├── k8s/ingress/aws|gcp/  # Per-cloud Ingress + TLS
+├── terraform/aws|gcp/      # Multi-cloud IaC
+├── .github/workflows/      # CI, Deploy, Terraform
+├── tests/
+├── Dockerfile
+└── start.sh
 ```
 
 ---
 
-## Local development (all options)
+## Local development
 
-### Option A — One command (recommended)
+| Mode | Command |
+|------|---------|
+| All-in-one script | `./start.sh` |
+| API only | `uvicorn app.main:app --reload --port 8000` |
+| UI dev server | `cd frontend && npm run dev` |
+| Prod-like (UI from API) | `cd frontend && npm run build && uvicorn app.main:app --port 8000` |
+| Tests | `pytest tests/ -v` |
 
-```bash
-./start.sh
-```
-
-### Option B — Backend only
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # add ANTHROPIC_API_KEY
-uvicorn app.main:app --reload --port 8000
-```
-
-API docs: http://localhost:8000/docs
-
-### Option C — Frontend dev server (separate terminal)
-
-```bash
-cd frontend && npm install && npm run dev
-```
-
-Uses `frontend/.env.development` → API at `http://localhost:8000`.
-
-### Option D — Production-like (UI served from API)
-
-```bash
-cd frontend && npm ci && npm run build
-cd .. && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000
-```
-
-Open http://localhost:8000 (same as production routing).
-
-### Run tests
-
-```bash
-pip install -r requirements.txt
-pytest tests/ -v
-cd frontend && npm ci && npm run build
-```
+Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:8000`). Production build uses **same-origin** `/analyze` (no localhost in the bundle).
 
 ---
 
@@ -282,96 +414,62 @@ cd frontend && npm ci && npm run build
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Serves built React UI (production) or API info (dev) |
-| `GET` | `/health` | `{"status":"ok","service":"debugpilot"}` |
-| `POST` | `/analyze` | Analyze log text with Claude |
+| `GET` | `/health` | Health check |
+| `POST` | `/analyze` | Analyze log text |
 | `GET` | `/incidents` | List saved analyses |
-| `GET` | `/incidents/{id}` | Get one saved analysis |
+| `GET` | `/incidents/{id}` | Get one analysis |
 | `GET` | `/metrics` | Prometheus metrics |
-| `GET` | `/docs` | OpenAPI (Swagger) |
-
-**Example analyze request:**
-
-```json
-{
-  "log_text": "Back-off pulling image \"my-app:badtag\"",
-  "source_hint": "kubernetes",
-  "save": true
-}
-```
+| `GET` | `/docs` | OpenAPI |
 
 ---
 
-## Production & infrastructure
-
-### GitHub secrets (for cloud deploy)
-
-| Secret | Used by |
-|--------|---------|
-| `ANTHROPIC_API_KEY` | Terraform apply → `debugpilot-secrets`; optional Deploy |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` / `AWS_ACCOUNT_ID` | Terraform, CI, Deploy |
-| `CLOUDFLARE_API_TOKEN` | external-dns (Terraform) |
-| `GCP_SA_KEY` / `GCP_PROJECT_ID` / `GCP_REGION` | GCP path (optional) |
-
-### First-time AWS bring-up (maintainers)
-
-1. **Terraform AWS Bootstrap** — ECR repo  
-2. Merge to **`main`** — CI builds and pushes image  
-3. **Terraform AWS → apply** — cluster + Argo CD + secret  
-4. Confirm DNS: `dig jobradar.manavmalavia.org CNAME +short`  
-5. Open https://jobradar.manavmalavia.org/health  
-
-### Kubernetes secret
-
-Terraform apply creates `debugpilot-secrets` automatically from `ANTHROPIC_API_KEY`.
-
-Manual fallback:
-
-```bash
-kubectl create secret generic debugpilot-secrets \
-  --from-literal=ANTHROPIC_API_KEY=your-key
-```
-
-See `app/incidents/` for operational runbooks (DNS stale CNAME, 503, ImagePullBackOff, etc.).
-
----
-
-## GitHub Actions workflows
+## GitHub Actions
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| **CI** | Push / PR to `main` | Test, ruff, helm lint, build & push image, update `values.yaml` |
-| **Deploy** | Manual | Optional secret refresh + pod restart |
-| **Terraform AWS** | Manual | Plan / apply / destroy EKS stack |
-| **Terraform AWS Bootstrap** | Manual | ECR repository |
-| **Terraform GCP** | Manual | GKE stack (optional) |
-| **Terraform GCP Foundation** | Manual | GAR + state bucket |
+| **CI** | Push / PR → `main` | Test, ruff, Helm lint, build & push image, update `values.yaml` |
+| **Deploy** | Manual | Optional rollout / image patch (Argo CD–managed clusters) |
+| **Terraform AWS** | Manual | plan / apply / destroy EKS |
+| **Terraform AWS Bootstrap** | Manual | ECR |
+| **Terraform GCP** | Manual | plan / apply / destroy GKE |
+| **Terraform GCP Foundation** | Manual | Artifact Registry + state |
+
+---
+
+## Operational runbooks
+
+Markdown guides in `app/incidents/`:
+
+| Playbook | Topic |
+|----------|--------|
+| `external-dns-stale-cname.md` | DNS drift after cluster recreate |
+| `ingress-503.md` | Ingress up, backend unhealthy |
+| `image-pull-backoff.md` | ECR/GAR image mismatch |
+| `cert-manager-tls.md` | TLS / ACME issues |
+| `terraform-state-lock.md` | State lock during apply |
+| `redis-localhost-k8s.md` | Redis URL in K8s |
+| `github-actions-kubeconfig.md` | CI cluster access |
 
 ---
 
 ## Troubleshooting
 
-| Problem | Likely cause | Fix |
-|---------|----------------|-----|
-| `Analyze` fails locally | Missing API key | Set `ANTHROPIC_API_KEY` in `.env` |
-| CORS / localhost from HTTPS site | Old frontend build | Use latest `main`; production uses same-origin `/analyze` |
-| **503** on live URL | Pod not ready | `kubectl get pods -l app=jobradar-api`; check `debugpilot-secrets` |
-| DNS doesn’t resolve | Stale Cloudflare CNAME | See `app/incidents/external-dns-stale-cname.md` |
-| Argo CD **OutOfSync** | Git / cluster drift | Sync in Argo CD UI or fix git |
+| Symptom | Likely cause | Pointer |
+|---------|----------------|---------|
+| `Could not resolve host` | Stale Cloudflare CNAME | [DNS section](#-dns-external-dns-and-failover-behavior) |
+| **503** from nginx | No ready endpoints | `kubectl get pods -l app=jobradar-api` |
+| Argo CD **OutOfSync** | Git vs cluster drift | Sync in UI; check repo path |
+| CORS / localhost from live site | Old frontend bundle | Use current `main` (same-origin API) |
+| GCP works, AWS doesn’t | Separate hostnames / records | Verify `jobradar` vs `jobradar-gcp` records independently |
 
 ---
 
 ## Author
 
-**Manav Malavia** — platform engineer portfolio project  
-
-- Website: [manavmalavia.org](https://manavmalavia.org)  
-- Repo: [github.com/manavmalavia18/JobTracker](https://github.com/manavmalavia18/JobTracker)
-
-If you’re reviewing this as a recruiter or hiring manager: clone → `./start.sh` → open localhost:5173 → run a sample analysis. That exercises the full product without any cloud account.
+**Manav Malavia** — [manavmalavia.org](https://manavmalavia.org) · [GitHub](https://github.com/manavmalavia18/JobTracker)
 
 ---
 
 <p align="center">
-  <sub>Built with FastAPI, React, Claude, Terraform, Kubernetes, Helm, and Argo CD.</sub>
+  <sub>FastAPI · React · Claude · Terraform · AWS EKS · GCP GKE · Helm · Argo CD · external-dns</sub>
 </p>
