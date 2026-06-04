@@ -153,6 +153,14 @@ resource "helm_release" "argocd" {
     value = "2024-01-01T00:00:00Z"
   }
 
+  dynamic "set" {
+    for_each = var.argocd_github_webhook_secret != "" ? [1] : []
+    content {
+      name  = "configs.secret.githubSecret"
+      value = var.argocd_github_webhook_secret
+    }
+  }
+
   depends_on = [null_resource.kubeconfig]
 }
 

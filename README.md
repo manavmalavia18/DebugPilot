@@ -170,7 +170,7 @@ You can run **one cloud or both**; destroying AWS does not remove GCP DNS record
 2. **AWS:** run `Terraform AWS Foundation` → apply (ECR `debugpilot-api`), then `Terraform AWS Cluster` → apply (new EKS cluster `debugpilot`).
 3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, run CI on `main` (updates `values-gcp.yaml` when GAR exists), then `Terraform GCP Cluster` → apply.
 4. Push to `main` so CI builds and tags `debugpilot-api` in both registries.
-5. Delete stale Cloudflare `jobradar*` records; point the Argo CD GitHub webhook at `debugpilot-argocd` (and GCP equivalent) if used.
+5. Delete stale Cloudflare `jobradar*` records. Add GitHub repo webhooks once per Argo URL (see [Argo CD GitHub webhook](#argocd-github-webhook)).
 
 ---
 
@@ -467,6 +467,30 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | **Terraform AWS Cluster** | Manual | plan / apply / destroy EKS |
 | **Terraform GCP Foundation** | Manual | Artifact Registry + state |
 | **Terraform GCP Cluster** | Manual | plan / apply / destroy GKE |
+
+### Repository secrets (Terraform / CI)
+
+| Secret | Used by |
+|--------|---------|
+| `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
+| `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
+
+### Argo CD GitHub webhook
+
+Terraform sets `configs.secret.githubSecret` when `ARGOCD_GITHUB_WEBHOOK_SECRET` (or `TF_VAR_argocd_github_webhook_secret` locally) is set. Use the **same** value you configured in GitHub.
+
+| Cloud | Webhook payload URL |
+|-------|---------------------|
+| GCP | `https://debugpilot-gcp-argocd.manavmalavia.org/api/webhook` |
+| AWS | `https://debugpilot-argocd.manavmalavia.org/api/webhook` |
+
+**One-time per URL:** create the webhook in GitHub (push events, shared secret). After cluster destroy/recreate, run Terraform apply only — no `kubectl patch` if the secret and URL are unchanged.
+
+Local apply:
+
+```bash
+export TF_VAR_argocd_github_webhook_secret='your-existing-secret'
+```
 
 ---
 
