@@ -1,6 +1,6 @@
 api:
-  # Project ID must match GitHub secret GCP_PROJECT_ID (set after foundation apply)
-  image: us-central1-docker.pkg.dev/REPLACE_GCP_PROJECT/debugpilot/debugpilot-api:latest
+  # Updated by CI on main when GAR repository debugpilot exists (GCP_PROJECT_ID secret)
+  image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:latest
   replicas: 1
   port: 8000
   imagePullPolicy: Always
