@@ -86,10 +86,9 @@ Multi-cloud Kubernetes deployment with Terraform, Helm, ArgoCD, Prometheus, and 
 - Helm chart lint + template render
 - Docker multi-stage build (React UI + FastAPI) → push to ECR + GAR on main
 
-**Deploy workflow (manual):**
-- Syncs `ANTHROPIC_API_KEY` from GitHub secrets → `debugpilot-secrets` in cluster
-- Restarts `jobradar-api` (and patches image if not managed by an existing Helm release)
-- App manifests are deployed by **ArgoCD** after Terraform apply; Deploy does not fight ArgoCD for ownership
+**Deploy workflow (optional):**
+- Re-sync secret or restart `jobradar-api` after image/key changes
+- Patches deployment image when ArgoCD owns the app (no Helm conflict)
 
 **Cluster lifecycle (AWS/GCP):**
 - **Destroy** — workflow deletes Ingress resources first so external-dns removes Cloudflare CNAMEs before the cluster is torn down
@@ -107,11 +106,11 @@ k8s/ingress/        TLS ingress for AWS + GCP
 .github/workflows/  CI, deploy, terraform
 ```
 
-### Kubernetes secret (required for deploy)
+### Kubernetes secret
 
-Add `ANTHROPIC_API_KEY` to GitHub repository secrets. The Deploy workflow creates/updates `debugpilot-secrets` in the cluster automatically.
+`ANTHROPIC_API_KEY` must be in **GitHub repository secrets**. **Terraform AWS/GCP apply** creates `debugpilot-secrets` automatically.
 
-Manual create:
+Deploy workflow is optional (key rotation or forced restart). Manual create:
 
 ```bash
 kubectl create secret generic debugpilot-secrets \

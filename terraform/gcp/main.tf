@@ -218,6 +218,27 @@ resource "null_resource" "ingress_rules" {
   ]
 }
 
+resource "null_resource" "debugpilot_secrets" {
+  count = var.anthropic_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    environment = {
+      ANTHROPIC_API_KEY = var.anthropic_api_key
+    }
+    command = <<-EOT
+      kubectl create secret generic debugpilot-secrets \
+        --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+        --dry-run=client -o yaml | kubectl apply -f -
+    EOT
+  }
+
+  depends_on = [null_resource.kubeconfig]
+
+  triggers = {
+    api_key_hash = sha256(var.anthropic_api_key)
+  }
+}
+
 resource "null_resource" "argocd_app" {
   provisioner "local-exec" {
     command = <<-EOT
@@ -248,5 +269,5 @@ resource "null_resource" "argocd_app" {
     EOT
   }
 
-  depends_on = [helm_release.argocd]
+  depends_on = [helm_release.argocd, null_resource.debugpilot_secrets]
 }

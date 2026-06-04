@@ -54,6 +54,13 @@ variable "domain_name" {
   default = "manavmalavia.org"
 }
 
+variable "anthropic_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+  description = "Anthropic API key for debugpilot-secrets (set via TF_VAR_anthropic_api_key in CI)"
+}
+
 variable "argocd_password" {
   type      = string
   sensitive = true

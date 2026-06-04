@@ -23,6 +23,7 @@ jobs:
     env:
       TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
       TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +53,12 @@ jobs:
 
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
-        run: terraform plan -input=false
+        run: |
+          if [ "${{ inputs.action }}" = "apply" ] && [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "Missing ANTHROPIC_API_KEY GitHub secret — required to create debugpilot-secrets on apply."
+            exit 1
+          fi
+          terraform plan -input=false
 
       - name: Terraform Apply
         if: inputs.action == 'apply'
