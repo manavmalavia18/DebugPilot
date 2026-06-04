@@ -11,7 +11,7 @@ redis:
       memory: 128Mi
 
 api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:2d659a20b108d9a9dc0ad459a30a1902d6779fef
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:f26d7e5282151682a3c38c13e780a0b3114ad762
   replicas: 1
   port: 8000
   nodePort: 30080
