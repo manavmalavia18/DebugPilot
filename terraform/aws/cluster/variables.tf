@@ -74,6 +74,27 @@ variable "argocd_password_bcrypt" {
   default   = "$2a$10$uaWjWzOi.bXRSaEflJkpH.JXqBpVMx.fwucnfPQtBvSJ1MuUJmhI6"
 }
 
+variable "github_client_id" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub OAuth App client ID"
+}
+
+variable "github_client_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub OAuth App client secret"
+}
+
+variable "jwt_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "JWT signing secret for session cookies"
+}
+
 variable "argocd_github_webhook_secret" {
   type        = string
   sensitive   = true

@@ -39,8 +39,25 @@ class AnalyzeResponse(AnalysisResult):
     )
 
 
+class User(SQLModel, table=True):
+    id: Optional[int] = SQLField(default=None, primary_key=True)
+    github_id: int = SQLField(index=True, unique=True)
+    username: str
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: datetime = SQLField(default_factory=datetime.utcnow)
+
+
+class UserRead(BaseModel):
+    id: int
+    username: str
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 class SavedIncident(SQLModel, table=True):
     id: Optional[int] = SQLField(default=None, primary_key=True)
+    user_id: int = SQLField(foreign_key="user.id", index=True)
     created_at: datetime = SQLField(default_factory=datetime.utcnow)
     log_text: str
     category: str

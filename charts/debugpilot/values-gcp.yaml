@@ -11,3 +11,5 @@ api:
   anthropicSecretName: debugpilot-secrets
   anthropicSecretKey: ANTHROPIC_API_KEY
   redisUrl: redis://redis:6379/0
+  publicBaseUrl: https://debugpilot-gcp.manavmalavia.org
+  authCookieSecure: true
