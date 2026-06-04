@@ -42,7 +42,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 
 | Layer | Responsibility |
 |--------|----------------|
-| **Application** | FastAPI API, React ops UI, SQLite history, Prometheus metrics |
+| **Application** | FastAPI API, React ops UI, SQLite history, Redis analysis cache, Prometheus metrics |
 | **Packaging** | Helm chart `charts/debugpilot`, multi-stage Docker image |
 | **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD |
 | **GCP** | GKE, Artifact Registry, same platform components, separate hostnames |
@@ -59,7 +59,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | API | **Python 3.12**, **FastAPI** | REST endpoints, OpenAPI, static UI in production |
 | AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
 | Persistence | **SQLModel**, **SQLite** (`debugpilot.db`) | Saved incident history |
-| Cache | **Redis** | Caches analysis by log + hint (skips repeat Claude calls) |
+| Cache | **Redis** (`redis:7-alpine` in Helm / compose) | Identical log + `source_hint` → cached JSON (default 7-day TTL); skips repeat Claude calls |
 | Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
 | UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
 | HTTP client | **Axios** | Same-origin API in prod; `VITE_API_URL` for local dev |
@@ -187,14 +187,17 @@ flowchart LR
     Routes[REST + static dist]
     Analyzer[analyzer.py]
     Playbooks[incidents/*.md]
+    Cache[(Redis)]
     AI[ai.py → Claude]
     DB[(SQLite)]
   end
   UI --> Routes
   Routes --> Analyzer
   Analyzer --> Playbooks
-  Analyzer --> AI
-  Analyzer --> DB
+  Analyzer --> Cache
+  Cache -->|miss| AI
+  AI --> Analyzer
+  Analyzer -->|save optional| DB
 ```
 
 ### Multi-cloud traffic (simplified)
@@ -243,7 +246,7 @@ flowchart TB
                                              ▼
                                       ┌──────────────┐
                                       │ debugpilot-api │
-                                      │   pods       │
+                                      │ redis        │
                                       └──────────────┘
 ```
 
@@ -251,7 +254,7 @@ flowchart TB
 |-------|------|----------------|
 | **Build** | GitHub Actions CI | pytest, ruff, frontend build, Docker buildx, push to ECR + GAR |
 | **Config git** | CI bot commit | Updates `charts/debugpilot/values.yaml` image digest on `main` |
-| **Sync** | Argo CD | Renders Helm chart → applies Deployment, Service, HPA, ServiceMonitor |
+| **Sync** | Argo CD | Renders Helm chart → applies API, **Redis**, Service, HPA, ServiceMonitor |
 | **Platform** | Terraform (manual) | Cluster, ingress controller, external-dns, cert-manager, Argo CD install |
 | **Edge** | Cloudflare + external-dns | Hostname → load balancer IP/CNAME per cloud |
 
@@ -349,6 +352,7 @@ Run the full product on your laptop — **no Kubernetes required**.
 | Python | 3.12+ |
 | Node.js | 22+ |
 | Anthropic API key | [console.anthropic.com](https://console.anthropic.com/) |
+| Redis (optional) | 7+ — caches repeat analyses; omit `REDIS_URL` to call Claude every time |
 
 ### Steps
 
@@ -357,10 +361,19 @@ git clone https://github.com/manavmalavia18/JobTracker.git
 cd JobTracker
 cp .env.example .env
 # Edit .env — set ANTHROPIC_API_KEY
+# Optional: REDIS_URL=redis://localhost:6379/0 (run Redis locally or use docker compose)
 
 chmod +x start.sh
 ./start.sh
 ```
+
+**With Redis (recommended for dev):** API + Redis in one command:
+
+```bash
+docker compose up --build
+```
+
+Uses `REDIS_URL=redis://redis:6379/0` from compose. UI still via `./start.sh` or http://localhost:8000 after building the frontend.
 
 - UI: http://localhost:5173  
 - API: http://localhost:8000  
@@ -383,6 +396,8 @@ Stop with `Ctrl+C` in the terminal running `start.sh`.
 - **Debug commands** — prefer read-only; destructive steps listed in **warnings**  
 - **Likely fix**, **prevention** tips  
 - Optional **save** to history (SQLite)
+
+**Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
 
 Playbooks under `app/incidents/` are keyword-matched to ground the model in real failure modes from this repo’s infra.
 
@@ -409,10 +424,21 @@ Playbooks under `app/incidents/` are keyword-matched to ground the model in real
 | Mode | Command |
 |------|---------|
 | All-in-one script | `./start.sh` |
+| API + Redis (compose) | `docker compose up --build` |
 | API only | `uvicorn app.main:app --reload --port 8000` |
 | UI dev server | `cd frontend && npm run dev` |
 | Prod-like (UI from API) | `cd frontend && npm run build && uvicorn app.main:app --port 8000` |
 | Tests | `pytest tests/ -v` |
+
+### Redis (local & Kubernetes)
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `REDIS_URL` | unset locally | e.g. `redis://localhost:6379/0` or `redis://redis:6379/0` in cluster |
+| `REDIS_CACHE_TTL_SECONDS` | `604800` (7 days) | How long cached analyses live |
+| `ANALYSIS_CACHE_VERSION` | `1` | Bump to invalidate cache after prompt/playbook changes |
+
+In **Kubernetes**, Helm deploys a `redis` Service (`charts/debugpilot/templates/redis.yaml`) when `redis.enabled: true`. The API uses cluster DNS `redis://redis:6379/0` — not `localhost` (see playbook `redis-localhost-k8s.md` for misconfigured *other* apps).
 
 Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:8000`). Production build uses **same-origin** `/analyze` (no localhost in the bundle).
 
@@ -469,6 +495,7 @@ Markdown guides in `app/incidents/`:
 | Argo CD **OutOfSync** | Git vs cluster drift | Sync in UI; check repo path |
 | CORS / localhost from live site | Old frontend bundle | Use current `main` (same-origin API) |
 | GCP works, AWS doesn’t | Separate hostnames / records | Verify `debugpilot` vs `debugpilot-gcp` records independently |
+| Every analyze hits Claude | Redis missing or wrong URL | `kubectl get pods -l app=redis`; confirm `REDIS_URL=redis://redis:6379/0` on API deployment |
 
 ---
 
