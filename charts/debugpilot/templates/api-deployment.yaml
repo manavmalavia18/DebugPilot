@@ -13,6 +13,12 @@ spec:
         app: debugpilot-api
     spec:
       serviceAccountName: debugpilot-api
+      {{- if .Values.api.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: debugpilot-api-data
+      {{- end }}
       containers:
         - name: debugpilot-api
           image: {{ .Values.api.image }}
@@ -61,6 +67,15 @@ spec:
             - name: AWS_REGION
               value: {{ .Values.api.awsRegion | default "us-east-1" | quote }}
             {{- end }}
+            {{- if .Values.api.persistence.enabled }}
+            - name: DATABASE_PATH
+              value: {{ .Values.api.persistence.databasePath | quote }}
+            {{- end }}
+          {{- if .Values.api.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.api.persistence.mountPath }}
+          {{- end }}
           resources:
             requests:
               cpu: 100m
