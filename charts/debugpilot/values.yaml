@@ -1,5 +1,5 @@
 api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:4970b2240a6e3ae66fe45fc4dd1e7e2472459d77
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:fcc49b2447c7c5ba80c9db9d9aab8af1b2b26078
   replicas: 1
   port: 8000
   nodePort: 30080
