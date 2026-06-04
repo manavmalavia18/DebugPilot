@@ -8,6 +8,7 @@ on:
       - "charts/debugpilot/values-gcp.yaml"
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -73,7 +74,7 @@ jobs:
   build-and-push:
     needs: [test, lint, helm]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
 
     steps:
       - uses: actions/checkout@v4

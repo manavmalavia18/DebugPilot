@@ -434,7 +434,7 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| **CI** | Push / PR → `main` | Test, ruff, Helm lint, build & push image, update `values.yaml` |
+| **CI** | Push / PR → `main`, or **Run workflow** | Test, ruff, Helm lint, build & push image, update `values.yaml` / `values-gcp.yaml` |
 | **Deploy** | Manual | Optional rollout / image patch (Argo CD–managed clusters) |
 | **Terraform AWS Foundation** | Manual | ECR |
 | **Terraform AWS Cluster** | Manual | plan / apply / destroy EKS |
