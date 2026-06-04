@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from app.ai import analyze_with_claude
+from app.cache import cache_key, get_cached_analysis, set_cached_analysis
 from app.models import AnalysisResult, SourceCategory
 
 INCIDENTS_DIR = Path(__file__).parent / "incidents"
@@ -96,6 +97,11 @@ def detect_source(log_text: str, source_hint: SourceCategory | None) -> SourceCa
 
 
 def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> AnalysisResult:
+    key = cache_key(log_text, source_hint)
+    cached = get_cached_analysis(key)
+    if cached is not None:
+        return AnalysisResult(**cached)
+
     relevant = find_relevant_incidents(log_text)
     category = detect_source(log_text, source_hint)
     context_blocks = "\n\n---\n\n".join(
@@ -112,6 +118,8 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> Ana
     result.similar_incidents = [name for name, _ in relevant]
     if result.category == "unknown" and category != "unknown":
         result.category = category
+
+    set_cached_analysis(key, result.model_dump())
     return result
 
 

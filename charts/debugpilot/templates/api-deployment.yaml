@@ -24,6 +24,10 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.api.anthropicSecretName }}
                   key: {{ .Values.api.anthropicSecretKey }}
+            {{- if and .Values.redis.enabled .Values.api.redisUrl }}
+            - name: REDIS_URL
+              value: {{ .Values.api.redisUrl | quote }}
+            {{- end }}
           resources:
             requests:
               cpu: 100m
