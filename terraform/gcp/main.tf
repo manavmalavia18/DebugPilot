@@ -228,11 +228,25 @@ resource "null_resource" "debugpilot_secrets" {
 
   provisioner "local-exec" {
     environment = {
-      ANTHROPIC_API_KEY = var.anthropic_api_key
+      ANTHROPIC_API_KEY      = var.anthropic_api_key
+      GITHUB_CLIENT_ID       = var.github_client_id
+      GITHUB_CLIENT_SECRET   = var.github_client_secret
+      JWT_SECRET             = var.jwt_secret
     }
     command = <<-EOT
+      EXTRA_ARGS=""
+      if [ -n "$GITHUB_CLIENT_ID" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=GITHUB_CLIENT_ID=$GITHUB_CLIENT_ID"
+      fi
+      if [ -n "$GITHUB_CLIENT_SECRET" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET"
+      fi
+      if [ -n "$JWT_SECRET" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=JWT_SECRET=$JWT_SECRET"
+      fi
       kubectl create secret generic debugpilot-secrets \
         --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+        $EXTRA_ARGS \
         --dry-run=client -o yaml | kubectl apply -f -
     EOT
   }
@@ -241,6 +255,7 @@ resource "null_resource" "debugpilot_secrets" {
 
   triggers = {
     api_key_hash = sha256(var.anthropic_api_key)
+    auth_hash    = sha256("${var.github_client_id}:${var.jwt_secret}")
   }
 }
 

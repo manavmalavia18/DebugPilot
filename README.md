@@ -449,7 +449,11 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `POST` | `/analyze` | Analyze log text; response adds `cached`, `duration_ms` |
+| `GET` | `/auth/config` | Whether GitHub login is required |
+| `GET` | `/auth/me` | Current user (session cookie) |
+| `GET` | `/auth/github/login` | Start GitHub OAuth |
+| `POST` | `/auth/logout` | Clear session |
+| `POST` | `/analyze` | Analyze log text; response adds `cached`, `duration_ms` (auth if OAuth configured) |
 | `GET` | `/incidents` | List saved analyses |
 | `GET` | `/incidents/{id}` | Get one analysis |
 | `GET` | `/metrics` | Prometheus metrics |
@@ -474,6 +478,31 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 |--------|---------|
 | `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
 | `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App — required for sign-in on production |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App |
+| `JWT_SECRET` | Session cookie signing (`openssl rand -hex 32`) |
+
+### GitHub sign-in (abuse protection)
+
+When `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set on the API (via `debugpilot-secrets`), `/analyze` and `/incidents` require a GitHub login. Sessions use an httpOnly cookie (7 days).
+
+1. Create a [GitHub OAuth App](https://github.com/settings/developers): **OAuth App** (not GitHub App).
+2. **Authorization callback URL:** `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` (and `http://localhost:8000/auth/github/callback` for local).
+3. Add Client ID, Client Secret, and `JWT_SECRET` to repo secrets (Terraform) or patch the cluster secret:
+
+   ```bash
+   kubectl -n default patch secret debugpilot-secrets --type merge -p '{
+     "stringData": {
+       "GITHUB_CLIENT_ID": "your-client-id",
+       "GITHUB_CLIENT_SECRET": "your-client-secret",
+       "JWT_SECRET": "your-openssl-hex-secret"
+     }
+   }'
+   ```
+
+4. Redeploy / restart API pods. `values-gcp.yaml` sets `publicBaseUrl` and `authCookieSecure: true`.
+
+Local dev without OAuth: leave `GITHUB_CLIENT_ID` unset — API uses a built-in `dev` user (`AUTH_DISABLED` behavior). Set `AUTH_DISABLED=1` to force that mode even if OAuth env vars exist.
 
 ### Argo CD GitHub webhook
 

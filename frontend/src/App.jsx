@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from "react"
-import axios from "axios"
-import { API_BASE } from "./api"
+import { api } from "./api"
 import AnalyzePanel from "./components/AnalyzePanel"
 import HistoryPanel from "./components/HistoryPanel"
 import KpiCards from "./components/KpiCards"
+import LoginGate from "./components/LoginGate"
 import Sidebar from "./components/Sidebar"
 import TopBar from "./components/TopBar"
+
+const AUTH_ERRORS = {
+  missing_code: "GitHub did not return an authorization code.",
+}
 
 export default function App() {
   const [view, setView] = useState("analyze")
@@ -16,10 +20,31 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
   const [apiOnline, setApiOnline] = useState(false)
+  const [authEnabled, setAuthEnabled] = useState(false)
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState("")
+
+  const loadAuth = useCallback(async () => {
+    try {
+      const configRes = await api.get("/auth/config")
+      setAuthEnabled(Boolean(configRes.data.auth_enabled))
+      const meRes = await api.get("/auth/me")
+      setUser(meRes.data)
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setUser(null)
+      } else {
+        setUser(null)
+      }
+    } finally {
+      setAuthLoading(false)
+    }
+  }, [])
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/incidents`)
+      const res = await api.get("/incidents")
       setHistory(res.data)
     } catch {
       setHistory([])
@@ -28,7 +53,7 @@ export default function App() {
 
   const checkHealth = useCallback(async () => {
     try {
-      await axios.get(`${API_BASE}/health`, { timeout: 3000 })
+      await api.get("/health", { timeout: 3000 })
       setApiOnline(true)
     } catch {
       setApiOnline(false)
@@ -36,18 +61,32 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    loadHistory()
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get("auth_error")
+    if (err) {
+      setAuthError(AUTH_ERRORS[err] || "Sign-in failed. Try again.")
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+    loadAuth()
     checkHealth()
     const interval = setInterval(checkHealth, 15000)
     return () => clearInterval(interval)
-  }, [loadHistory, checkHealth])
+  }, [loadAuth, checkHealth])
+
+  useEffect(() => {
+    if (user) {
+      loadHistory()
+    } else {
+      setHistory([])
+    }
+  }, [user, loadHistory])
 
   const analyze = async () => {
     if (!logText.trim()) return
     setLoading(true)
     setError("")
     try {
-      const res = await axios.post(`${API_BASE}/analyze`, {
+      const res = await api.post("/analyze", {
         log_text: logText,
         source_hint: sourceHint || null,
         save: true,
@@ -56,7 +95,12 @@ export default function App() {
       setView("analyze")
       loadHistory()
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Analysis failed")
+      if (err.response?.status === 401) {
+        setUser(null)
+        setError("Sign in required to analyze logs.")
+      } else {
+        setError(err.response?.data?.detail || err.message || "Analysis failed")
+      }
     } finally {
       setLoading(false)
     }
@@ -64,7 +108,7 @@ export default function App() {
 
   const loadIncident = async (id) => {
     try {
-      const res = await axios.get(`${API_BASE}/incidents/${id}`)
+      const res = await api.get(`/incidents/${id}`)
       setResult({ ...res.data, cached: undefined, duration_ms: undefined })
       setView("analyze")
       setError("")
@@ -73,18 +117,43 @@ export default function App() {
     }
   }
 
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout")
+    } catch {
+      /* ignore */
+    }
+    setUser(null)
+    setResult(null)
+    setHistory([])
+  }
+
   const loadPreset = (preset) => {
     setLogText(preset.log)
     setSourceHint(preset.source)
     setError("")
   }
 
+  const needsLogin = authEnabled && !user
+  const sessionLabel = user
+    ? authEnabled
+      ? `@${user.username}`
+      : user.username
+    : "guest"
+
   return (
     <div className="flex min-h-screen">
       <Sidebar active={view} onNavigate={setView} historyCount={history.length} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar apiOnline={apiOnline} loading={loading} />
+        <TopBar
+          apiOnline={apiOnline}
+          loading={loading}
+          user={user}
+          authEnabled={authEnabled}
+          sessionLabel={sessionLabel}
+          onLogout={logout}
+        />
 
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mb-6">
@@ -97,28 +166,36 @@ export default function App() {
             </p>
           </div>
 
-          <div className="mb-6">
-            <KpiCards history={history} result={result} />
-          </div>
-
-          {view === "analyze" ? (
-            <AnalyzePanel
-              logText={logText}
-              setLogText={setLogText}
-              sourceHint={sourceHint}
-              setSourceHint={setSourceHint}
-              loading={loading}
-              error={error}
-              result={result}
-              onAnalyze={analyze}
-              onLoadPreset={loadPreset}
-            />
+          {authLoading ? (
+            <p className="font-mono text-sm text-muted">Checking session...</p>
+          ) : needsLogin ? (
+            <LoginGate authError={authError} />
           ) : (
-            <HistoryPanel
-              history={history}
-              onSelect={loadIncident}
-              onRefresh={loadHistory}
-            />
+            <>
+              <div className="mb-6">
+                <KpiCards history={history} result={result} />
+              </div>
+
+              {view === "analyze" ? (
+                <AnalyzePanel
+                  logText={logText}
+                  setLogText={setLogText}
+                  sourceHint={sourceHint}
+                  setSourceHint={setSourceHint}
+                  loading={loading}
+                  error={error}
+                  result={result}
+                  onAnalyze={analyze}
+                  onLoadPreset={loadPreset}
+                />
+              ) : (
+                <HistoryPanel
+                  history={history}
+                  onSelect={loadIncident}
+                  onRefresh={loadHistory}
+                />
+              )}
+            </>
           )}
         </main>
       </div>
