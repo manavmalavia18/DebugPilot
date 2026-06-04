@@ -478,31 +478,45 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 |--------|---------|
 | `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
 | `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
-| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App — required for sign-in on production |
-| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App |
-| `JWT_SECRET` | Session cookie signing (`openssl rand -hex 32`) |
+| `GITHUB_OAUTH_CLIENT_ID_AWS` | GitHub OAuth App for **AWS** hostname (Terraform AWS Cluster) |
+| `GITHUB_OAUTH_CLIENT_SECRET_AWS` | OAuth secret for AWS |
+| `GITHUB_OAUTH_CLIENT_ID_GCP` | GitHub OAuth App for **GCP** hostname (Terraform GCP Cluster) |
+| `GITHUB_OAUTH_CLIENT_SECRET_GCP` | OAuth secret for GCP |
+| `JWT_SECRET` | Session cookie signing — **same value on both clouds** (`openssl rand -hex 32`) |
 
 ### GitHub sign-in (abuse protection)
 
 When `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set on the API (via `debugpilot-secrets`), `/analyze` and `/incidents` require a GitHub login. Sessions use an httpOnly cookie (7 days).
 
-1. Create a [GitHub OAuth App](https://github.com/settings/developers): **OAuth App** (not GitHub App).
-2. **Authorization callback URL:** `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` (and `http://localhost:8000/auth/github/callback` for local).
-3. Add Client ID, Client Secret, and `JWT_SECRET` to repo secrets (Terraform) or patch the cluster secret:
+GitHub OAuth Apps allow **one callback URL per app**, so use **two OAuth Apps** if AWS and GCP can both be live (failover). Use the **same** `JWT_SECRET` in both clusters.
+
+| Cloud | OAuth App callback URL | Helm `publicBaseUrl` |
+|-------|------------------------|----------------------|
+| **AWS** | `https://debugpilot.manavmalavia.org/auth/github/callback` | `charts/debugpilot/values.yaml` |
+| **GCP** | `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` | `charts/debugpilot/values-gcp.yaml` |
+| **Local** | `http://localhost:8000/auth/github/callback` | `.env` / `PUBLIC_BASE_URL` |
+
+1. Create [GitHub OAuth Apps](https://github.com/settings/developers) (**OAuth App**, not GitHub App). **Do not enable device flow.**
+2. Add repo secrets: `GITHUB_OAUTH_CLIENT_ID_AWS`, `GITHUB_OAUTH_CLIENT_SECRET_AWS`, `GITHUB_OAUTH_CLIENT_ID_GCP`, `GITHUB_OAUTH_CLIENT_SECRET_GCP`, `JWT_SECRET`.
+3. Run **Terraform AWS Cluster** and **Terraform GCP Cluster** apply (each writes OAuth keys into that cluster’s `debugpilot-secrets`), or patch manually:
 
    ```bash
-   kubectl -n default patch secret debugpilot-secrets --type merge -p '{
+   # AWS example (namespace default)
+   kubectl patch secret debugpilot-secrets --type merge -p '{
      "stringData": {
-       "GITHUB_CLIENT_ID": "your-client-id",
-       "GITHUB_CLIENT_SECRET": "your-client-secret",
-       "JWT_SECRET": "your-openssl-hex-secret"
+       "GITHUB_CLIENT_ID": "aws-oauth-client-id",
+       "GITHUB_CLIENT_SECRET": "aws-oauth-client-secret",
+       "JWT_SECRET": "shared-jwt-secret"
      }
    }'
+   kubectl rollout restart deployment/debugpilot-api
    ```
 
-4. Redeploy / restart API pods. `values-gcp.yaml` sets `publicBaseUrl` and `authCookieSecure: true`.
+4. Argo syncs the chart; each cloud uses its own `publicBaseUrl` + `authCookieSecure: true`.
 
-Local dev without OAuth: leave `GITHUB_CLIENT_ID` unset — API uses a built-in `dev` user (`AUTH_DISABLED` behavior). Set `AUTH_DISABLED=1` to force that mode even if OAuth env vars exist.
+**Only one cloud up?** Create one OAuth App for that hostname and set only that cloud’s `_AWS` or `_GCP` repo secrets.
+
+Local dev without OAuth: leave `GITHUB_CLIENT_ID` unset — API uses a built-in `dev` user. Set `AUTH_DISABLED=1` to force dev mode even if OAuth env vars exist.
 
 ### Argo CD GitHub webhook
 
