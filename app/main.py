@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 
 from app.ai import follow_up_with_claude
 from app.analyzer import analyze_log
+from app.incident_retrieval import find_similar_saved_incidents, format_incident_history_context
 from app.auth import (
     OAUTH_STATE_COOKIE,
     build_github_login_redirect,
@@ -231,8 +232,16 @@ def analyze(
     if not log_text:
         raise HTTPException(status_code=400, detail="log_text or upload_id is required")
 
+    history_matches = find_similar_saved_incidents(session, user.id, log_text)
+    history_context = format_incident_history_context(history_matches)
+
     try:
-        result, cached = analyze_log(log_text, request.source_hint)
+        result, cached = analyze_log(
+            log_text,
+            request.source_hint,
+            user_id=user.id,
+            incident_history_context=history_context,
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
 

@@ -20,6 +20,7 @@ Rules:
 - Add destructive commands to the warnings array with explanation.
 - Set confidence to low if the log snippet is too short or ambiguous.
 - Never invent exact AWS account IDs, hostnames, or pod names not present in the log.
+- When similar past incidents from this user are provided, prefer their root cause and fix if the log matches.
 
 JSON schema:
 {
@@ -43,13 +44,21 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def analyze_with_claude(log_text: str, category: str, incident_context: str) -> dict:
+def analyze_with_claude(
+    log_text: str,
+    category: str,
+    playbook_context: str,
+    incident_history_context: str = "",
+) -> dict:
     user_prompt = f"""Analyze this infrastructure error log.
 
 Detected category hint: {category}
 
-Reference incidents from this project (use if relevant):
-{incident_context}
+Reference playbooks (use if relevant):
+{playbook_context or "No closely matching playbooks."}
+
+Similar past incidents from this user's history (use if relevant):
+{incident_history_context or "No similar past incidents yet."}
 
 Log text:
 {log_text}

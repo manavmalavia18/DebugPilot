@@ -33,10 +33,11 @@ def get_redis() -> Optional[redis.Redis]:
     return _redis
 
 
-def cache_key(log_text: str, source_hint: Optional[str]) -> str:
+def cache_key(log_text: str, source_hint: Optional[str], user_id: Optional[int] = None) -> str:
     normalized = " ".join(log_text.strip().split())
     hint = source_hint or ""
-    payload = f"{CACHE_VERSION}\n{MODEL}\n{hint}\n{normalized}"
+    user_part = str(user_id) if user_id is not None else ""
+    payload = f"{CACHE_VERSION}\n{MODEL}\n{hint}\n{user_part}\n{normalized}"
     digest = hashlib.sha256(payload.encode()).hexdigest()
     return f"{KEY_PREFIX}:{digest}"
 

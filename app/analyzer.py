@@ -45,8 +45,14 @@ def detect_source(log_text: str, source_hint: SourceCategory | None) -> SourceCa
     return "app"
 
 
-def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tuple[AnalysisResult, bool]:
-    key = cache_key(log_text, source_hint)
+def analyze_log(
+    log_text: str,
+    source_hint: SourceCategory | None = None,
+    *,
+    user_id: int | None = None,
+    incident_history_context: str = "",
+) -> tuple[AnalysisResult, bool]:
+    key = cache_key(log_text, source_hint, user_id=user_id)
     cached_payload = get_cached_analysis(key)
     if cached_payload is not None:
         analysis_cache_hits.inc()
@@ -55,14 +61,15 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tup
     matches = find_relevant_playbooks(log_text)
     context_matches = playbooks_for_llm_context(matches)
     category = detect_source(log_text, source_hint)
-    context_blocks = "\n\n---\n\n".join(
-        f"Known incident: {match.name}\n{match.content}" for match in context_matches
+    playbook_context = "\n\n---\n\n".join(
+        f"Playbook: {match.name}\n{match.content}" for match in context_matches
     )
 
     raw = analyze_with_claude(
         log_text=log_text.strip(),
         category=category,
-        incident_context=context_blocks or "No closely matching saved incidents.",
+        playbook_context=playbook_context,
+        incident_history_context=incident_history_context,
     )
 
     result = AnalysisResult(**raw)
