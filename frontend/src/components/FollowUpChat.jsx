@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { api } from "../api"
 
-export default function FollowUpChat({ incidentId }) {
+export default function FollowUpChat({ incidentId, fullHeight = false }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
@@ -64,46 +64,58 @@ export default function FollowUpChat({ incidentId }) {
   if (!incidentId) return null
 
   return (
-    <div className="shrink-0 border-t border-border bg-void/80">
-      <div className="border-b border-border px-3 py-2">
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted">Follow-up chat</p>
-        <p className="text-[11px] text-muted">Ask about the diagnosis, commands, or fix</p>
+    <div
+      className={`flex flex-col border border-accent/40 bg-panel ${
+        fullHeight ? "h-full min-h-[320px] xl:min-h-0" : "min-h-[280px] shrink-0"
+      }`}
+    >
+      <div className="shrink-0 border-b border-accent/30 bg-accent/5 px-4 py-3">
+        <h2 className="font-mono text-sm font-semibold text-accent">Follow-up chat</h2>
+        <p className="mt-0.5 text-xs text-muted">
+          Ask about the diagnosis, Helm changes, or commands
+        </p>
       </div>
 
-      <div className="max-h-36 overflow-y-auto px-3 py-2 space-y-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 && !loading && (
-          <p className="font-mono text-[11px] text-neutral-500">
-            e.g. &quot;Why localhost fails in K8s?&quot; or &quot;Show the YAML change&quot;
-          </p>
+          <div className="rounded border border-dashed border-border bg-void/50 px-3 py-4 text-center">
+            <p className="font-mono text-xs text-neutral-400">No messages yet</p>
+            <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted">
+              Try: &quot;What should REDIS_URL be in the Helm chart?&quot;
+            </p>
+          </div>
         )}
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`rounded border px-2 py-1.5 text-[12px] leading-relaxed ${
+            className={`rounded border px-3 py-2.5 text-[13px] leading-relaxed ${
               msg.role === "user"
-                ? "border-border bg-panel text-neutral-300"
-                : "border-accent/25 bg-accent/5 text-neutral-200"
+                ? "border-border bg-void text-neutral-200"
+                : "border-accent/30 bg-accent/8 text-neutral-100"
             }`}
           >
-            <span className="font-mono text-[9px] uppercase tracking-wider text-muted">
-              {msg.role === "user" ? "you" : "debugpilot"}
+            <span
+              className={`font-mono text-[10px] font-semibold uppercase tracking-wider ${
+                msg.role === "user" ? "text-muted" : "text-accent"
+              }`}
+            >
+              {msg.role === "user" ? "You" : "DebugPilot"}
             </span>
-            <p className="mt-0.5 whitespace-pre-wrap">{msg.content}</p>
+            <p className="mt-1.5 whitespace-pre-wrap">{msg.content}</p>
           </div>
         ))}
         {loading && (
-          <p className="animate-pulse font-mono text-[11px] text-info">thinking...</p>
+          <p className="animate-pulse font-mono text-sm text-info">DebugPilot is thinking...</p>
         )}
         <div ref={bottomRef} />
       </div>
 
       {error && (
-        <p className="px-3 pb-1 font-mono text-[11px] text-red-300">{error}</p>
+        <p className="shrink-0 px-4 pb-2 font-mono text-xs text-red-300">{error}</p>
       )}
 
-      <div className="flex gap-2 border-t border-border p-2">
-        <input
-          type="text"
+      <div className="shrink-0 space-y-2 border-t border-border bg-void/40 p-4">
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -112,17 +124,18 @@ export default function FollowUpChat({ incidentId }) {
               send()
             }
           }}
-          placeholder="Ask a follow-up..."
+          placeholder="Ask a follow-up... (Enter to send, Shift+Enter for newline)"
           disabled={loading}
-          className="min-w-0 flex-1 border border-border bg-black px-2 py-1.5 font-mono text-[12px] text-neutral-200 outline-none focus:border-accent"
+          rows={3}
+          className="w-full resize-none border border-border bg-black px-3 py-2.5 font-mono text-[13px] leading-relaxed text-neutral-200 outline-none focus:border-accent"
         />
         <button
           type="button"
           onClick={send}
           disabled={loading || !input.trim()}
-          className="shrink-0 border border-accent bg-accent/15 px-3 py-1.5 font-mono text-[11px] text-accent hover:bg-accent/25 disabled:opacity-40"
+          className="w-full border border-accent bg-accent/20 py-2.5 font-mono text-sm font-semibold text-accent transition-colors hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Send
+          {loading ? "Sending..." : "Send message"}
         </button>
       </div>
     </div>
