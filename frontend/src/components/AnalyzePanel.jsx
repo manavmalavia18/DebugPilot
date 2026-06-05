@@ -37,8 +37,14 @@ export default function AnalyzePanel({
 }) {
   const lineCount = logText ? logText.split("\n").length : 1
 
+  const showChat = Boolean(result && incidentId)
+
   return (
-    <div className="grid h-full min-h-0 gap-3 xl:grid-cols-2">
+    <div
+      className={`grid h-full min-h-0 gap-3 ${
+        showChat ? "xl:grid-cols-[1fr_1fr_1fr]" : "xl:grid-cols-2"
+      }`}
+    >
       {/* Input */}
       <section className="flex min-h-0 flex-col border border-border bg-panel">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
@@ -233,9 +239,11 @@ export default function AnalyzePanel({
             )}
           </div>
         )}
-
-        {result && incidentId && <FollowUpChat incidentId={incidentId} />}
       </section>
+
+      {showChat && (
+        <FollowUpChat incidentId={incidentId} fullHeight />
+      )}
     </div>
   )
 }
