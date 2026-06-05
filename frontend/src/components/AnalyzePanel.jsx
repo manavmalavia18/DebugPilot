@@ -42,7 +42,7 @@ export default function AnalyzePanel({
   return (
     <div
       className={`grid h-full min-h-0 gap-3 ${
-        showChat ? "xl:grid-cols-[1fr_1fr_1fr]" : "xl:grid-cols-2"
+        showChat ? "lg:grid-cols-[1fr_1fr_1fr]" : "lg:grid-cols-2"
       }`}
     >
       {/* Input */}
