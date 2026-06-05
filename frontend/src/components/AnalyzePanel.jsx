@@ -1,4 +1,5 @@
 import { SAMPLE_PRESETS } from "../data/samples"
+import FollowUpChat from "./FollowUpChat"
 
 const SOURCE_OPTIONS = [
   { value: "", label: "Auto-detect" },
@@ -29,6 +30,7 @@ export default function AnalyzePanel({
   uploadFilename,
   error,
   result,
+  incidentId,
   onAnalyze,
   onLoadPreset,
   onUploadFile,
@@ -231,6 +233,8 @@ export default function AnalyzePanel({
             )}
           </div>
         )}
+
+        {result && incidentId && <FollowUpChat incidentId={incidentId} />}
       </section>
     </div>
   )

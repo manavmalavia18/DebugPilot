@@ -54,6 +54,10 @@ class AnalyzeResponse(AnalysisResult):
         ge=0,
         description="Wall-clock time for this request in milliseconds",
     )
+    incident_id: Optional[int] = Field(
+        default=None,
+        description="Saved incident id when save=true; use for follow-up chat",
+    )
 
 
 class User(SQLModel, table=True):
@@ -105,6 +109,15 @@ class SavedIncident(SQLModel, table=True):
     response_json: str
 
 
+class IncidentChatMessage(SQLModel, table=True):
+    id: Optional[int] = SQLField(default=None, primary_key=True)
+    incident_id: int = SQLField(foreign_key="savedincident.id", index=True)
+    user_id: int = SQLField(foreign_key="user.id", index=True)
+    role: str = SQLField(max_length=16)
+    content: str
+    created_at: datetime = SQLField(default_factory=datetime.utcnow)
+
+
 class SavedIncidentRead(BaseModel):
     id: int
     created_at: datetime
@@ -114,3 +127,19 @@ class SavedIncidentRead(BaseModel):
     likely_fix: str
     confidence: str
     source_filename: Optional[str] = None
+
+
+class ChatMessageRead(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    message: ChatMessageRead

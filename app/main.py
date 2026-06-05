@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlmodel import Session, select
 
+from app.ai import follow_up_with_claude
 from app.analyzer import analyze_log
 from app.auth import (
     OAUTH_STATE_COOKIE,
@@ -29,6 +30,10 @@ from app.models import (
     AnalyzeRequest,
     AnalyzeResponse,
     AnalysisResult,
+    ChatMessageRead,
+    ChatRequest,
+    ChatResponse,
+    IncidentChatMessage,
     LogUpload,
     SavedIncident,
     SavedIncidentRead,
@@ -233,6 +238,7 @@ def analyze(
 
     duration_ms = round((time.perf_counter() - started) * 1000, 1)
 
+    incident_id: int | None = None
     if request.save:
         saved = SavedIncident(
             user_id=user.id,
@@ -248,11 +254,14 @@ def analyze(
         )
         session.add(saved)
         session.commit()
+        session.refresh(saved)
+        incident_id = saved.id
 
     return AnalyzeResponse(
         **result.model_dump(),
         cached=cached,
         duration_ms=duration_ms,
+        incident_id=incident_id,
     )
 
 
@@ -294,6 +303,93 @@ def get_incident(
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Incident not found")
     return AnalysisResult(**json.loads(row.response_json))
+
+
+def _get_user_incident(
+    session: Session, user: User, incident_id: int
+) -> SavedIncident:
+    row = session.get(SavedIncident, incident_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return row
+
+
+@app.get("/incidents/{incident_id}/messages", response_model=List[ChatMessageRead])
+def list_incident_messages(
+    incident_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    _get_user_incident(session, user, incident_id)
+    query = (
+        select(IncidentChatMessage)
+        .where(IncidentChatMessage.incident_id == incident_id)
+        .order_by(IncidentChatMessage.created_at.asc())
+    )
+    rows = session.exec(query).all()
+    return [
+        ChatMessageRead(
+            id=row.id,
+            role=row.role,
+            content=row.content,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+
+@app.post("/incidents/{incident_id}/chat", response_model=ChatResponse)
+def incident_chat(
+    incident_id: int,
+    request: ChatRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    incident = _get_user_incident(session, user, incident_id)
+    prior_rows = session.exec(
+        select(IncidentChatMessage)
+        .where(IncidentChatMessage.incident_id == incident_id)
+        .order_by(IncidentChatMessage.created_at.asc())
+    ).all()
+    history = [(row.role, row.content) for row in prior_rows]
+    diagnosis = json.loads(incident.response_json)
+
+    try:
+        reply = follow_up_with_claude(
+            log_text=incident.log_text,
+            diagnosis=diagnosis,
+            history=history,
+            user_message=request.message.strip(),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Chat failed: {exc}") from exc
+
+    user_row = IncidentChatMessage(
+        incident_id=incident_id,
+        user_id=user.id,
+        role="user",
+        content=request.message.strip(),
+    )
+    assistant_row = IncidentChatMessage(
+        incident_id=incident_id,
+        user_id=user.id,
+        role="assistant",
+        content=reply,
+    )
+    session.add(user_row)
+    session.add(assistant_row)
+    session.commit()
+    session.refresh(assistant_row)
+
+    return ChatResponse(
+        reply=reply,
+        message=ChatMessageRead(
+            id=assistant_row.id,
+            role="assistant",
+            content=assistant_row.content,
+            created_at=assistant_row.created_at,
+        ),
+    )
 
 
 if FRONTEND_DIST.exists():
