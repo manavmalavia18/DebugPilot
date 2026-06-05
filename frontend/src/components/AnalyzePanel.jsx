@@ -40,11 +40,7 @@ export default function AnalyzePanel({
   const showChat = Boolean(result && incidentId)
 
   return (
-    <div
-      className={`grid h-full min-h-0 gap-3 ${
-        showChat ? "lg:grid-cols-[1fr_1fr_1fr]" : "lg:grid-cols-2"
-      }`}
-    >
+    <div className="grid h-full min-h-0 gap-3 lg:grid-cols-2">
       {/* Input */}
       <section className="flex min-h-0 flex-col border border-border bg-panel">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
@@ -139,8 +135,13 @@ export default function AnalyzePanel({
         </div>
       </section>
 
-      {/* Output */}
-      <section className="flex min-h-0 flex-col border border-border bg-panel">
+      {/* Output + chat stacked on the right */}
+      <div className="flex min-h-0 flex-col gap-3">
+        <section
+          className={`flex min-h-0 flex-col border border-border bg-panel ${
+            showChat ? "flex-[3]" : "flex-1"
+          }`}
+        >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <div>
             <h2 className="font-mono text-sm font-semibold">Diagnosis output</h2>
@@ -239,11 +240,14 @@ export default function AnalyzePanel({
             )}
           </div>
         )}
-      </section>
+        </section>
 
-      {showChat && (
-        <FollowUpChat incidentId={incidentId} fullHeight />
-      )}
+        {showChat && (
+          <div className="flex min-h-[220px] min-h-0 flex-[2] flex-col">
+            <FollowUpChat incidentId={incidentId} fullHeight />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
