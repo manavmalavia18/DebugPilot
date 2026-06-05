@@ -79,8 +79,7 @@ jobs:
           echo "Deploying image tag: ${{ steps.resolve_tag_aws.outputs.image_tag }}"
           if helm status debugpilot -n default >/dev/null 2>&1; then
             helm upgrade --install debugpilot ./charts/debugpilot \
-              --set api.image="$IMAGE" \
-              --set api.replicas=1
+              --set api.image="$IMAGE"
           else
             echo "No Helm release — app is managed by ArgoCD. Patching deployment image..."
             kubectl set image deployment/debugpilot-api debugpilot-api="$IMAGE"

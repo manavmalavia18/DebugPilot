@@ -1,3 +1,4 @@
+{{- if .Values.api.hpa.enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -7,12 +8,13 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: debugpilot-api
-  minReplicas: 1
-  maxReplicas: 5
+  minReplicas: {{ .Values.api.hpa.minReplicas }}
+  maxReplicas: {{ .Values.api.hpa.maxReplicas }}
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 50
+          averageUtilization: {{ .Values.api.hpa.targetCPUUtilization }}
+{{- end }}

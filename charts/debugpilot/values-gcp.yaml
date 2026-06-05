@@ -5,6 +5,11 @@ api:
   # Updated by CI on main when GAR repository debugpilot exists (GCP_PROJECT_ID secret)
   image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:89c454d4bcb05818541a4c061a88ec3fd1646b7a
   replicas: 1
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilization: 50
   port: 8000
   imagePullPolicy: Always
   serviceType: ClusterIP
