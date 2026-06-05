@@ -42,6 +42,8 @@ jobs:
           npm run build
 
       - name: Run tests
+        env:
+          AUTH_DISABLED: "1"
         run: pytest tests/ -v
 
   lint:

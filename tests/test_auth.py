@@ -44,6 +44,7 @@ def test_auth_me_dev_user_when_disabled(client):
 @patch.dict(
     os.environ,
     {
+        "AUTH_DISABLED": "",
         "GITHUB_CLIENT_ID": "test-id",
         "GITHUB_CLIENT_SECRET": "test-secret",
         "JWT_SECRET": "test-jwt-secret-key",
