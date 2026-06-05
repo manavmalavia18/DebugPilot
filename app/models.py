@@ -32,6 +32,13 @@ class PlaybookMatch(BaseModel):
     method: Literal["semantic", "keyword"] = "semantic"
 
 
+class IncidentHistoryMatchRead(BaseModel):
+    incident_id: int
+    score: float = Field(ge=0, le=1)
+    method: Literal["semantic", "keyword"]
+    symptom: str
+
+
 class AnalysisResult(BaseModel):
     category: SourceCategory
     symptom: str
@@ -57,6 +64,10 @@ class AnalyzeResponse(AnalysisResult):
     incident_id: Optional[int] = Field(
         default=None,
         description="Saved incident id when save=true; use for follow-up chat",
+    )
+    incident_history_matches: list[IncidentHistoryMatchRead] = Field(
+        default_factory=list,
+        description="Past saved incidents injected into this analysis context",
     )
 
 

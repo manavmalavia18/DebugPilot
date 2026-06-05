@@ -48,6 +48,7 @@ export default function AnalyzePanel({
   onAnalyze,
   onLoadPreset,
   onUploadFile,
+  onLoadIncident,
 }) {
   const containerRef = useRef(null)
   const [leftWidthPct, setLeftWidthPct] = useState(() => loadStored(LEFT_WIDTH_KEY, 50, 30, 70))
@@ -212,6 +213,33 @@ export default function AnalyzePanel({
             <DiagnosisBlock title="What failed" content={result.what_failed} />
             <DiagnosisBlock title="Root cause" content={result.root_cause} highlight />
             <DiagnosisBlock title="Likely fix" content={result.likely_fix} highlight />
+
+            {result.incident_history_matches?.length > 0 && (
+              <div className="mb-4 border border-accent/30 bg-accent/5 p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-accent">
+                  Past incidents used
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {result.incident_history_matches.map((match) => (
+                    <button
+                      key={match.incident_id}
+                      type="button"
+                      title={match.symptom}
+                      onClick={() => onLoadIncident?.(match.incident_id)}
+                      className={`border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                        match.method === "semantic"
+                          ? "border-accent/50 bg-accent/10 text-accent hover:border-accent"
+                          : "border-accent/30 text-neutral-200 hover:border-accent/50 hover:text-accent"
+                      } ${onLoadIncident ? "cursor-pointer" : "cursor-default"}`}
+                    >
+                      #{match.incident_id}
+                      {match.symptom ? ` · ${match.symptom}` : ""}
+                      {typeof match.score === "number" ? ` · ${Math.round(match.score * 100)}%` : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(result.playbook_matches?.length > 0 || result.similar_incidents?.length > 0) && (
               <div className="mb-4 border border-border bg-void p-3">
