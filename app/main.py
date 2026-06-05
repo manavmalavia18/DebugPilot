@@ -34,7 +34,6 @@ from app.deps import get_current_user
 from app.models import (
     AnalyzeRequest,
     AnalyzeResponse,
-    AnalysisResult,
     ChatMessageRead,
     ChatRequest,
     ChatResponse,
