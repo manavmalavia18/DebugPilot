@@ -3,7 +3,7 @@ redis:
 
 api:
   # Updated by CI on main when GAR repository debugpilot exists (GCP_PROJECT_ID secret)
-  image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:c0d836cd77e45eca859155d9716e7248c57c351d
+  image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:3154d12185589edbd2e98a2a628ea9debad51bc3
   replicas: 1
   hpa:
     enabled: true
