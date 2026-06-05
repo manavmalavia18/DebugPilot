@@ -95,6 +95,11 @@ variable "jwt_secret" {
   description = "JWT signing secret for session cookies"
 }
 
+variable "db_instance_class" {
+  type    = string
+  default = "db.t4g.micro"
+}
+
 variable "argocd_github_webhook_secret" {
   type        = string
   sensitive   = true

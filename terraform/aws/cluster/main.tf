@@ -1,9 +1,10 @@
 terraform {
   required_providers {
-    aws  = { source = "hashicorp/aws", version = "~> 5.0" }
-    helm = { source = "hashicorp/helm", version = "~> 2.0" }
-    null = { source = "hashicorp/null", version = "~> 3.0" }
-    tls  = { source = "hashicorp/tls", version = "~> 4.0" }
+    aws    = { source = "hashicorp/aws", version = "~> 5.0" }
+    helm   = { source = "hashicorp/helm", version = "~> 2.0" }
+    null   = { source = "hashicorp/null", version = "~> 3.0" }
+    random = { source = "hashicorp/random", version = "~> 3.0" }
+    tls    = { source = "hashicorp/tls", version = "~> 4.0" }
   }
 }
 
@@ -192,6 +193,7 @@ resource "null_resource" "debugpilot_secrets" {
       GITHUB_CLIENT_ID     = var.github_client_id
       GITHUB_CLIENT_SECRET = var.github_client_secret
       JWT_SECRET           = var.jwt_secret
+      DATABASE_URL         = local.database_url
     }
     command = <<-EOT
       EXTRA_ARGS=""
@@ -204,6 +206,9 @@ resource "null_resource" "debugpilot_secrets" {
       if [ -n "$JWT_SECRET" ]; then
         EXTRA_ARGS="$EXTRA_ARGS --from-literal=JWT_SECRET=$JWT_SECRET"
       fi
+      if [ -n "$DATABASE_URL" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=DATABASE_URL=$DATABASE_URL"
+      fi
       kubectl create secret generic debugpilot-secrets \
         --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
         $EXTRA_ARGS \
@@ -211,11 +216,12 @@ resource "null_resource" "debugpilot_secrets" {
     EOT
   }
 
-  depends_on = [null_resource.kubeconfig]
+  depends_on = [null_resource.kubeconfig, aws_db_instance.postgres]
 
   triggers = {
     api_key_hash = sha256(var.anthropic_api_key)
     auth_hash    = sha256("${var.github_client_id}:${var.jwt_secret}")
+    db_hash      = sha256(local.database_url)
   }
 }
 
