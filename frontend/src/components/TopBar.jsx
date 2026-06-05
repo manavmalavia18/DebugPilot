@@ -1,17 +1,5 @@
 import { API_BASE } from "../api"
 
-function sessionInitial(sessionLabel, user) {
-  if (user?.username) return user.username[0].toUpperCase()
-  if (sessionLabel.startsWith("@")) return sessionLabel[1]?.toUpperCase() || "?"
-  return sessionLabel[0]?.toUpperCase() || "?"
-}
-
-function sessionMode(authEnabled, user) {
-  if (authEnabled && user) return "github auth"
-  if (authEnabled) return "awaiting sign-in"
-  return "local sandbox"
-}
-
 export default function TopBar({
   apiOnline,
   loading,
@@ -24,7 +12,6 @@ export default function TopBar({
   onLogout,
 }) {
   const loginUrl = `${API_BASE}/auth/github/login`
-  const initial = sessionInitial(sessionLabel, user)
 
   return (
     <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-border bg-panel/90 px-4 py-3 backdrop-blur-sm">
@@ -69,80 +56,46 @@ export default function TopBar({
           </span>
         )}
 
-        <div
-          className={`relative hidden overflow-hidden border bg-void/60 sm:block ${
-            apiOnline ? "border-accent/30" : "border-danger/40"
-          }`}
-        >
-          <div
-            className={`absolute inset-y-0 left-0 w-0.5 ${
-              apiOnline ? "bg-accent shadow-[0_0_10px_#22c55e]" : "bg-danger"
-            }`}
-          />
-
-          <div className="flex items-center gap-3 px-3 py-2 pl-3.5">
-            {user?.avatar_url ? (
-              <div className="relative shrink-0">
-                <img
-                  src={user.avatar_url}
-                  alt=""
-                  className={`h-9 w-9 border-2 ${
-                    apiOnline ? "border-accent/40" : "border-danger/40"
-                  }`}
-                />
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 border-2 border-void ${
-                    apiOnline ? "bg-accent shadow-[0_0_6px_#22c55e]" : "bg-danger"
-                  }`}
-                />
-              </div>
-            ) : (
-              <div
-                className={`relative flex h-9 w-9 shrink-0 items-center justify-center border-2 font-mono text-sm font-bold ${
-                  apiOnline
-                    ? "border-accent/40 bg-accent/10 text-accent"
-                    : "border-danger/40 bg-danger/10 text-danger"
-                }`}
-              >
-                {initial}
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 border-2 border-void ${
-                    apiOnline ? "bg-accent" : "bg-danger"
-                  }`}
-                />
-              </div>
-            )}
-
-            <div className="min-w-0 leading-tight">
-              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted">session</p>
-              <p className="truncate font-mono text-sm font-medium text-neutral-100">{sessionLabel}</p>
-              <p className="font-mono text-[10px] text-muted">
-                {sessionMode(authEnabled, user)}
-                <span className="mx-1.5 text-border">·</span>
-                <span className={apiOnline ? "text-accent" : "text-danger"}>
-                  {apiOnline ? "api live" : "api down"}
-                </span>
-              </p>
+        <div className="hidden items-center gap-2.5 sm:flex">
+          {user?.avatar_url ? (
+            <img src={user.avatar_url} alt="" className="h-8 w-8 border border-border" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center border border-border bg-neutral-900 font-mono text-xs text-neutral-400">
+              {sessionLabel.replace("@", "").charAt(0).toUpperCase()}
             </div>
+          )}
 
-            {authEnabled && user && (
-              <button
-                type="button"
-                onClick={onLogout}
-                className="ml-1 shrink-0 border border-border px-2 py-1 font-mono text-[10px] text-neutral-400 transition-colors hover:border-accent/50 hover:text-accent"
-              >
-                exit
-              </button>
-            )}
-            {authEnabled && !user && (
-              <a
-                href={loginUrl}
-                className="ml-1 shrink-0 border border-accent bg-accent/10 px-2 py-1 font-mono text-[10px] text-accent transition-colors hover:bg-accent/20"
-              >
-                sign in
-              </a>
-            )}
+          <div className="min-w-0 font-mono leading-tight">
+            <p className="truncate text-sm text-neutral-100">{sessionLabel}</p>
+            <p className="flex items-center gap-1.5 text-[10px] text-muted">
+              {authEnabled && user ? "GitHub" : authEnabled ? "Guest" : "Local"}
+              <span className="text-border">·</span>
+              <span className={`inline-flex items-center gap-1 ${apiOnline ? "text-accent" : "text-danger"}`}>
+                <span
+                  className={`h-1.5 w-1.5 ${apiOnline ? "bg-accent" : "bg-danger"}`}
+                />
+                {apiOnline ? "online" : "offline"}
+              </span>
+            </p>
           </div>
+
+          {authEnabled && user && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="ml-1 border border-border px-2 py-1 font-mono text-[10px] text-neutral-400 hover:border-neutral-600 hover:text-neutral-200"
+            >
+              sign out
+            </button>
+          )}
+          {authEnabled && !user && (
+            <a
+              href={loginUrl}
+              className="ml-1 border border-accent px-2 py-1 font-mono text-[10px] text-accent hover:bg-accent/10"
+            >
+              sign in
+            </a>
+          )}
         </div>
       </div>
     </header>
