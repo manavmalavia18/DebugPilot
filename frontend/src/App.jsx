@@ -245,6 +245,7 @@ export default function App() {
                   onAnalyze={analyze}
                   onLoadPreset={loadPreset}
                   onUploadFile={uploadLogFile}
+                  onLoadIncident={loadIncident}
                 />
               ) : (
                 <div className="h-full overflow-y-auto">

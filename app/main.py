@@ -13,7 +13,11 @@ from sqlmodel import Session, select
 
 from app.ai import follow_up_with_claude
 from app.analyzer import analyze_log
-from app.incident_retrieval import find_similar_saved_incidents, format_incident_history_context
+from app.incident_retrieval import (
+    find_similar_saved_incidents,
+    format_incident_history_context,
+    incidents_for_llm_context,
+)
 from app.auth import (
     OAUTH_STATE_COOKIE,
     build_github_login_redirect,
@@ -35,6 +39,7 @@ from app.models import (
     ChatRequest,
     ChatResponse,
     IncidentChatMessage,
+    IncidentHistoryMatchRead,
     LogUpload,
     SavedIncident,
     SavedIncidentRead,
@@ -233,6 +238,7 @@ def analyze(
         raise HTTPException(status_code=400, detail="log_text or upload_id is required")
 
     history_matches = find_similar_saved_incidents(session, user.id, log_text)
+    context_matches = incidents_for_llm_context(history_matches)
     history_context = format_incident_history_context(history_matches)
 
     try:
@@ -271,6 +277,15 @@ def analyze(
         cached=cached,
         duration_ms=duration_ms,
         incident_id=incident_id,
+        incident_history_matches=[
+            IncidentHistoryMatchRead(
+                incident_id=match.incident_id,
+                score=match.score,
+                method=match.method,
+                symptom=match.symptom,
+            )
+            for match in context_matches
+        ],
     )
 
 

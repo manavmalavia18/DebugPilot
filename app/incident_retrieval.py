@@ -25,6 +25,7 @@ class IncidentHistoryMatch:
     content: str
     score: float
     method: str  # "semantic" | "keyword"
+    symptom: str = ""
 
 
 def _incident_content(row: SavedIncident) -> str:
@@ -78,6 +79,7 @@ def _keyword_incident_matches(
             content=_incident_content(row),
             score=round(min(1.0, value / max(top_score, 1)), 3),
             method="keyword",
+            symptom=row.symptom,
         )
         for value, row in scored[:limit]
         if row.id is not None
@@ -105,6 +107,7 @@ def _semantic_incident_matches(
                     content=_incident_content(row),
                     score=round(score, 3),
                     method="semantic",
+                    symptom=row.symptom,
                 )
             )
 

@@ -87,9 +87,17 @@ def test_find_similar_saved_incidents_semantic_mock(session, monkeypatch):
 
 
 def test_incidents_for_llm_context_requires_strong_semantic_match():
+    from app.incident_retrieval import IncidentHistoryMatch
+
     weak = incidents_for_llm_context(
         [
-            type("M", (), {"score": 0.5, "method": "semantic"})(),
+            IncidentHistoryMatch(
+                incident_id=1,
+                content="x",
+                score=0.5,
+                method="semantic",
+                symptom="s",
+            ),
         ]
     )
     assert weak == []
@@ -105,6 +113,7 @@ def test_format_incident_history_context_includes_past_fix():
                 content="Root cause: bad host\nLikely fix: use service DNS",
                 score=0.82,
                 method="semantic",
+                symptom="Redis unreachable",
             )
         ]
     )
