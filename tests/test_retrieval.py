@@ -5,6 +5,7 @@ from app.retrieval import (
     _cosine_similarity,
     _keyword_matches,
     find_relevant_playbooks,
+    playbooks_for_llm_context,
     semantic_rag_enabled,
 )
 
@@ -55,6 +56,23 @@ def test_find_relevant_playbooks_semantic_mock(monkeypatch):
     assert matches[0].name == "redis-localhost-k8s"
     assert matches[0].method == "semantic"
     assert matches[0].score > 0.5
+
+
+def test_playbooks_for_llm_context_drops_weak_semantic():
+    matches = [
+        PlaybookMatch(name="weak", content="x", score=0.69, method="semantic"),
+        PlaybookMatch(name="strong", content="y", score=0.89, method="semantic"),
+    ]
+    context = playbooks_for_llm_context(matches)
+    assert len(context) == 1
+    assert context[0].name == "strong"
+
+
+def test_playbooks_for_llm_context_keeps_keyword_matches():
+    matches = [
+        PlaybookMatch(name="redis-localhost-k8s", content="x", score=0.5, method="keyword"),
+    ]
+    assert playbooks_for_llm_context(matches) == matches
 
 
 def test_find_relevant_playbooks_keyword_fallback(monkeypatch):

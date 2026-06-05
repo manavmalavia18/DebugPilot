@@ -199,10 +199,10 @@ export default function App() {
     : "guest"
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar active={view} onNavigate={setView} historyCount={history.length} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopBar
           apiOnline={apiOnline}
           loading={loading}
@@ -212,49 +212,57 @@ export default function App() {
           onLogout={logout}
         />
 
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-6">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">infrastructure debugger</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-neutral-100">
-              {view === "analyze" ? "Analyze incident" : "Incident history"}
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              Paste logs from Kubernetes, Terraform, GitHub Actions, or Docker — get root cause and fix commands.
-            </p>
-          </div>
-
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
           {authLoading ? (
             <p className="font-mono text-sm text-muted">Checking session...</p>
           ) : needsLogin ? (
             <LoginGate authError={authError} />
           ) : (
             <>
-              <div className="mb-6">
-                <KpiCards history={history} result={result} />
+              <div className="mb-3 shrink-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">infrastructure debugger</p>
+                <h2 className="mt-0.5 text-lg font-semibold tracking-tight text-neutral-100">
+                  {view === "analyze" ? "Analyze incident" : "Incident history"}
+                </h2>
+                {view === "analyze" && (
+                  <p className="mt-0.5 text-xs text-muted">
+                    Paste logs — get root cause and fix commands.
+                  </p>
+                )}
               </div>
 
-              {view === "analyze" ? (
-                <AnalyzePanel
-                  logText={logText}
-                  setLogText={handleLogTextChange}
-                  sourceHint={sourceHint}
-                  setSourceHint={setSourceHint}
-                  loading={loading}
-                  uploading={uploading}
-                  uploadFilename={uploadFilename}
-                  error={error}
-                  result={result}
-                  onAnalyze={analyze}
-                  onLoadPreset={loadPreset}
-                  onUploadFile={uploadLogFile}
-                />
-              ) : (
-                <HistoryPanel
-                  history={history}
-                  onSelect={loadIncident}
-                  onRefresh={loadHistory}
-                />
+              {view === "history" && (
+                <div className="mb-3 shrink-0">
+                  <KpiCards history={history} result={result} />
+                </div>
               )}
+
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {view === "analyze" ? (
+                  <AnalyzePanel
+                    logText={logText}
+                    setLogText={handleLogTextChange}
+                    sourceHint={sourceHint}
+                    setSourceHint={setSourceHint}
+                    loading={loading}
+                    uploading={uploading}
+                    uploadFilename={uploadFilename}
+                    error={error}
+                    result={result}
+                    onAnalyze={analyze}
+                    onLoadPreset={loadPreset}
+                    onUploadFile={uploadLogFile}
+                  />
+                ) : (
+                  <div className="h-full overflow-y-auto">
+                    <HistoryPanel
+                      history={history}
+                      onSelect={loadIncident}
+                      onRefresh={loadHistory}
+                    />
+                  </div>
+                )}
+              </div>
             </>
           )}
         </main>

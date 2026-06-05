@@ -7,6 +7,7 @@ from pathlib import Path
 INCIDENTS_DIR = Path(__file__).parent / "incidents"
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 RETRIEVAL_MIN_SCORE = float(os.getenv("RETRIEVAL_MIN_SCORE", "0.35"))
+RETRIEVAL_CONTEXT_MIN_SCORE = float(os.getenv("RETRIEVAL_CONTEXT_MIN_SCORE", "0.70"))
 LOG_EMBED_MAX_CHARS = int(os.getenv("LOG_EMBED_MAX_CHARS", "4000"))
 
 KEYWORD_MAP: dict[str, list[str]] = {
@@ -171,6 +172,18 @@ def _semantic_matches(log_text: str, limit: int) -> list[PlaybookMatch]:
                 method="semantic",
             )
         ]
+    return []
+
+
+def playbooks_for_llm_context(matches: list[PlaybookMatch]) -> list[PlaybookMatch]:
+    """Only strong semantic matches are injected into the Claude prompt."""
+    if not matches:
+        return []
+    strong = [match for match in matches if match.score >= RETRIEVAL_CONTEXT_MIN_SCORE]
+    if strong:
+        return strong
+    if matches[0].method == "keyword":
+        return matches
     return []
 
 

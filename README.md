@@ -5,11 +5,14 @@
 </p>
 
 <p align="center">
-  <a href="https://debugpilot.manavmalavia.org">AWS demo</a> ·
-  <a href="https://debugpilot-gcp.manavmalavia.org">GCP demo</a> ·
+  <a href="https://debugpilot.manavmalavia.org">Live demo (AWS)</a> ·
   <a href="#-quick-start-local">Local setup</a> ·
   <a href="#-multi-cloud-infrastructure">Multi-cloud</a> ·
   <a href="#-dns-external-dns-and-failover-behavior">DNS</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/analyze.png" alt="DebugPilot analyze screen — log input, AI diagnosis, and playbook match badge" width="720" />
 </p>
 
 ---
@@ -42,7 +45,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 
 | Layer | Responsibility |
 |--------|----------------|
-| **Application** | FastAPI API, React ops UI, SQLite history, Redis analysis cache, Prometheus metrics |
+| **Application** | FastAPI API, React ops UI, Postgres/SQLite history, semantic RAG playbooks, Redis analysis cache, Prometheus metrics |
 | **Packaging** | Helm chart `charts/debugpilot`, multi-stage Docker image |
 | **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD |
 | **GCP** | GKE, Artifact Registry, same platform components, separate hostnames |
@@ -58,7 +61,7 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 |-----------|------------|------|
 | API | **Python 3.12**, **FastAPI** | REST endpoints, OpenAPI, static UI in production |
 | AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
-| Persistence | **SQLModel**, **SQLite** (`debugpilot.db`) | Saved incident history |
+| Persistence | **SQLModel**, **Postgres** (RDS on EKS) or **SQLite** locally | Saved incident history |
 | Cache | **Redis** (`redis:7-alpine` in Helm / compose) | Identical log + `source_hint` → cached JSON (default 7-day TTL); skips repeat Claude calls |
 | Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
 | UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
@@ -189,7 +192,7 @@ flowchart LR
     Playbooks[incidents/*.md]
     Cache[(Redis)]
     AI[ai.py → Claude]
-    DB[(SQLite)]
+    DB[(Postgres / SQLite)]
   end
   UI --> Routes
   Routes --> Analyzer
@@ -395,13 +398,13 @@ Stop with `Ctrl+C` in the terminal running `start.sh`.
 - **Symptom**, **what failed**, **root cause**, **confidence**  
 - **Debug commands** — prefer read-only; destructive steps listed in **warnings**  
 - **Likely fix**, **prevention** tips  
-- Optional **save** to history (SQLite)
+- Optional **save** to history (Postgres in cluster, SQLite locally)
 
 **Log uploads:** On AWS, files go to S3 (`debugpilot-log-uploads-<account_id>` from Terraform bootstrap). EKS node IAM allows `PutObject`/`GetObject`. Helm sets `UPLOADS_S3_BUCKET` in `values.yaml`. Locally, set `UPLOADS_LOCAL_DIR` when S3 is unset.
 
 **Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). `POST /analyze` includes `cached` (boolean) and `duration_ms` so the UI and metrics can show Redis vs Claude. Prometheus counters: `debugpilot_analysis_cache_hits_total`, `debugpilot_analysis_cache_misses_total`. Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
 
-Playbooks under `app/incidents/` are keyword-matched to ground the model in real failure modes from this repo’s infra.
+Playbooks under `app/incidents/` are retrieved with **semantic RAG** (fastembed + cosine similarity); only matches ≥70% (`RETRIEVAL_CONTEXT_MIN_SCORE`) are sent to Claude. Keyword fallback applies when embeddings are unavailable.
 
 ---
 
@@ -431,6 +434,7 @@ Playbooks under `app/incidents/` are keyword-matched to ground the model in real
 | UI dev server | `cd frontend && npm run dev` |
 | Prod-like (UI from API) | `cd frontend && npm run build && uvicorn app.main:app --port 8000` |
 | Tests | `pytest tests/ -v` |
+| RAG eval (semantic) | `EVAL_INTEGRATION=1 pytest tests/test_eval_retrieval.py -v` |
 
 ### Redis (local & Kubernetes)
 
