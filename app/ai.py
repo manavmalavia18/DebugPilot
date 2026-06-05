@@ -75,10 +75,16 @@ FOLLOWUP_SYSTEM_PROMPT = """You are DebugPilot, a senior DevOps engineer continu
 You already analyzed an infrastructure log and produced an initial diagnosis. The user is asking follow-up questions.
 
 Rules:
-- Answer in plain text (markdown code blocks OK for commands).
-- Stay grounded in the original log and initial diagnosis — do not invent resources not implied by the log.
+- Reply in plain text only. No markdown headers (no # or ##), no **bold**, no essay-style intros.
+- Do not end with questions like "Need help?" or "Want me to...".
+- Use ONLY these section labels when relevant (skip empty sections):
+  SUMMARY: 1-2 short sentences
+  FIX: concrete steps, one per line starting with -
+  COMMANDS: one shell command per line starting with -
+  WARNINGS: only for destructive steps, one per line starting with -
+- Stay grounded in the original log and initial diagnosis.
 - Prefer read-only kubectl/terraform commands; warn before destructive steps.
-- Be concise and practical."""
+- Be terse like an ops runbook, not a tutorial."""
 
 
 def follow_up_with_claude(
