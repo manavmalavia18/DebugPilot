@@ -181,13 +181,24 @@ export default function AnalyzePanel({
             <DiagnosisBlock title="Root cause" content={result.root_cause} highlight />
             <DiagnosisBlock title="Likely fix" content={result.likely_fix} highlight />
 
-            {result.similar_incidents?.length > 0 && (
+            {(result.playbook_matches?.length > 0 || result.similar_incidents?.length > 0) && (
               <div className="mb-4 border border-border bg-void p-3">
                 <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Matched playbooks</p>
                 <div className="flex flex-wrap gap-2">
-                  {result.similar_incidents.map((name) => (
-                    <span key={name} className="border border-border px-2 py-0.5 font-mono text-[11px] text-neutral-300">
-                      {name}
+                  {(result.playbook_matches?.length
+                    ? result.playbook_matches
+                    : result.similar_incidents.map((name) => ({ name, score: null, method: "keyword" }))
+                  ).map((match) => (
+                    <span
+                      key={match.name}
+                      className={`border px-2 py-0.5 font-mono text-[11px] ${
+                        match.method === "semantic"
+                          ? "border-info/40 bg-info/10 text-info"
+                          : "border-border text-neutral-300"
+                      }`}
+                    >
+                      {match.name}
+                      {typeof match.score === "number" ? ` · ${Math.round(match.score * 100)}%` : ""}
                     </span>
                   ))}
                 </div>

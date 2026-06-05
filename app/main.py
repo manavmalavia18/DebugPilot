@@ -51,6 +51,9 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    from app.retrieval import warmup_playbook_index
+
+    warmup_playbook_index()
     yield
 
 

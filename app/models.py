@@ -26,6 +26,12 @@ class AnalyzeRequest(BaseModel):
         return self
 
 
+class PlaybookMatch(BaseModel):
+    name: str
+    score: float = Field(ge=0, le=1)
+    method: Literal["semantic", "keyword"] = "semantic"
+
+
 class AnalysisResult(BaseModel):
     category: SourceCategory
     symptom: str
@@ -36,6 +42,7 @@ class AnalysisResult(BaseModel):
     likely_fix: str
     prevention: list[str]
     similar_incidents: list[str] = Field(default_factory=list)
+    playbook_matches: list[PlaybookMatch] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

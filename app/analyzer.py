@@ -1,11 +1,11 @@
 import json
-from pathlib import Path
 
 from prometheus_client import Counter
 
 from app.ai import analyze_with_claude
 from app.cache import cache_key, get_cached_analysis, set_cached_analysis
-from app.models import AnalysisResult, SourceCategory
+from app.models import AnalysisResult, PlaybookMatch, SourceCategory
+from app.retrieval import find_relevant_playbooks
 
 analysis_cache_hits = Counter(
     "debugpilot_analysis_cache_hits_total",
@@ -16,74 +16,12 @@ analysis_cache_misses = Counter(
     "Analysis responses that invoked Claude",
 )
 
-INCIDENTS_DIR = Path(__file__).parent / "incidents"
-
-KEYWORD_MAP: dict[str, list[str]] = {
-    "redis-localhost-k8s.md": [
-        "redis",
-        "6379",
-        "connection refused",
-        "localhost",
-        "crashloopbackoff",
-    ],
-    "image-pull-backoff.md": [
-        "imagepullbackoff",
-        "errimagepull",
-        "failed to pull image",
-        "manifest unknown",
-    ],
-    "ingress-503.md": [
-        "503",
-        "service unavailable",
-        "ingress",
-        "upstream",
-    ],
-    "terraform-state-lock.md": [
-        "terraform",
-        "state lock",
-        "force-unlock",
-        "acquiring the state lock",
-    ],
-    "github-actions-kubeconfig.md": [
-        "github actions",
-        "workflow",
-        "kubeconfig",
-        "unauthorized",
-        "logged in to the server",
-        "eks update-kubeconfig",
-    ],
-    "cert-manager-tls.md": [
-        "cert-manager",
-        "certificate",
-        "letsencrypt",
-        "tls",
-        "x509",
-        "challenge",
-    ],
-}
-
 SOURCE_PATTERNS: list[tuple[SourceCategory, list[str]]] = [
     ("kubernetes", ["kubectl", "pod", "deployment", "crashloop", "namespace", "kube-"]),
     ("terraform", ["terraform", "provider.", "module.", "resource \""]),
     ("github_actions", ["github actions", "workflow", "runs-on:", "##[error]"]),
     ("docker", ["docker", "container", "dockerfile"]),
 ]
-
-
-def _score_incident(filename: str, log_text: str) -> int:
-    keywords = KEYWORD_MAP.get(filename, [])
-    haystack = log_text.lower()
-    return sum(1 for keyword in keywords if keyword in haystack)
-
-
-def find_relevant_incidents(log_text: str, limit: int = 3) -> list[tuple[str, str]]:
-    scored: list[tuple[int, str, str]] = []
-    for path in INCIDENTS_DIR.glob("*.md"):
-        score = _score_incident(path.name, log_text)
-        if score > 0:
-            scored.append((score, path.stem, path.read_text()))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [(name, content) for _, name, content in scored[:limit]]
 
 
 def detect_source(log_text: str, source_hint: SourceCategory | None) -> SourceCategory:
@@ -114,10 +52,10 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tup
         analysis_cache_hits.inc()
         return AnalysisResult(**cached_payload), True
 
-    relevant = find_relevant_incidents(log_text)
+    matches = find_relevant_playbooks(log_text)
     category = detect_source(log_text, source_hint)
     context_blocks = "\n\n---\n\n".join(
-        f"Known incident: {name}\n{content}" for name, content in relevant
+        f"Known incident: {match.name}\n{match.content}" for match in matches
     )
 
     raw = analyze_with_claude(
@@ -127,7 +65,11 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tup
     )
 
     result = AnalysisResult(**raw)
-    result.similar_incidents = [name for name, _ in relevant]
+    result.similar_incidents = [match.name for match in matches]
+    result.playbook_matches = [
+        PlaybookMatch(name=match.name, score=match.score, method=match.method)
+        for match in matches
+    ]
     if result.category == "unknown" and category != "unknown":
         result.category = category
 
