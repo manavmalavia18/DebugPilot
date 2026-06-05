@@ -65,11 +65,12 @@ export default function AnalyzePanel({
   }, [])
 
   return (
-    <div ref={containerRef} className="relative flex h-full min-h-0">
-      <section
-        className="flex min-h-0 min-w-0 flex-col border border-border bg-panel"
-        style={{ width: `${leftWidthPct}%` }}
-      >
+    <div
+      ref={containerRef}
+      className="relative grid h-full min-h-0"
+      style={{ gridTemplateColumns: `${leftWidthPct}fr 8px ${100 - leftWidthPct}fr` }}
+    >
+      <section className="flex min-h-0 min-w-0 flex-col border border-border bg-panel">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <div>
             <h2 className="font-mono text-sm font-semibold">Error log input</h2>
@@ -164,7 +165,7 @@ export default function AnalyzePanel({
 
       <ResizeHandle direction="horizontal" onResize={resizeLeftColumn} />
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col border border-border bg-panel">
+      <section className="flex min-h-0 min-w-0 flex-col border border-border bg-panel">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <div>
             <h2 className="font-mono text-sm font-semibold">Diagnosis output</h2>
