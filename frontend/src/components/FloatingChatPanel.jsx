@@ -10,11 +10,11 @@ export default function FloatingChatPanel({ incidentId }) {
     if (!incidentId) {
       setOpen(false)
       setHasNewReply(false)
+      setLastIncidentId(null)
       return
     }
     if (incidentId !== lastIncidentId) {
       setLastIncidentId(incidentId)
-      setOpen(true)
       setHasNewReply(true)
     }
   }, [incidentId, lastIncidentId])
