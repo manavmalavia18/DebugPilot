@@ -66,7 +66,7 @@ export default function FollowUpChat({ incidentId, fullHeight = false }) {
   return (
     <div
       className={`flex flex-col border border-accent/40 bg-panel ${
-        fullHeight ? "h-full min-h-[320px] xl:min-h-0" : "min-h-[280px] shrink-0"
+        fullHeight ? "h-full min-h-[320px] lg:min-h-0" : "min-h-[280px] shrink-0"
       }`}
     >
       <div className="shrink-0 border-b border-accent/30 bg-accent/5 px-4 py-3">

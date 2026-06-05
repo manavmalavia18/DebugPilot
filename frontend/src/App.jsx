@@ -4,7 +4,6 @@ import AnalyzePanel from "./components/AnalyzePanel"
 import HistoryPanel from "./components/HistoryPanel"
 import KpiCards from "./components/KpiCards"
 import LoginGate from "./components/LoginGate"
-import Sidebar from "./components/Sidebar"
 import TopBar from "./components/TopBar"
 
 const AUTH_ERRORS = {
@@ -204,75 +203,62 @@ export default function App() {
     : "guest"
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar active={view} onNavigate={setView} historyCount={history.length} />
+    <div className="flex h-screen flex-col overflow-hidden">
+      <TopBar
+        apiOnline={apiOnline}
+        loading={loading}
+        user={user}
+        authEnabled={authEnabled}
+        sessionLabel={sessionLabel}
+        activeView={view}
+        historyCount={history.length}
+        onNavigate={setView}
+        onLogout={logout}
+      />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TopBar
-          apiOnline={apiOnline}
-          loading={loading}
-          user={user}
-          authEnabled={authEnabled}
-          sessionLabel={sessionLabel}
-          onLogout={logout}
-        />
-
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          {authLoading ? (
-            <p className="font-mono text-sm text-muted">Checking session...</p>
-          ) : needsLogin ? (
-            <LoginGate authError={authError} />
-          ) : (
-            <>
-              <div className="mb-3 shrink-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">infrastructure debugger</p>
-                <h2 className="mt-0.5 text-lg font-semibold tracking-tight text-neutral-100">
-                  {view === "analyze" ? "Analyze incident" : "Incident history"}
-                </h2>
-                {view === "analyze" && (
-                  <p className="mt-0.5 text-xs text-muted">
-                    Paste logs — get root cause and fix commands.
-                  </p>
-                )}
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2">
+        {authLoading ? (
+          <p className="font-mono text-sm text-muted">Checking session...</p>
+        ) : needsLogin ? (
+          <LoginGate authError={authError} />
+        ) : (
+          <>
+            {view === "history" && (
+              <div className="mb-2 shrink-0">
+                <KpiCards history={history} result={result} />
               </div>
+            )}
 
-              {view === "history" && (
-                <div className="mb-3 shrink-0">
-                  <KpiCards history={history} result={result} />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {view === "analyze" ? (
+                <AnalyzePanel
+                  logText={logText}
+                  setLogText={handleLogTextChange}
+                  sourceHint={sourceHint}
+                  setSourceHint={setSourceHint}
+                  loading={loading}
+                  uploading={uploading}
+                  uploadFilename={uploadFilename}
+                  error={error}
+                  result={result}
+                  incidentId={incidentId}
+                  onAnalyze={analyze}
+                  onLoadPreset={loadPreset}
+                  onUploadFile={uploadLogFile}
+                />
+              ) : (
+                <div className="h-full overflow-y-auto">
+                  <HistoryPanel
+                    history={history}
+                    onSelect={loadIncident}
+                    onRefresh={loadHistory}
+                  />
                 </div>
               )}
-
-              <div className="min-h-0 flex-1 overflow-hidden">
-                {view === "analyze" ? (
-                  <AnalyzePanel
-                    logText={logText}
-                    setLogText={handleLogTextChange}
-                    sourceHint={sourceHint}
-                    setSourceHint={setSourceHint}
-                    loading={loading}
-                    uploading={uploading}
-                    uploadFilename={uploadFilename}
-                    error={error}
-                    result={result}
-                    incidentId={incidentId}
-                    onAnalyze={analyze}
-                    onLoadPreset={loadPreset}
-                    onUploadFile={uploadLogFile}
-                  />
-                ) : (
-                  <div className="h-full overflow-y-auto">
-                    <HistoryPanel
-                      history={history}
-                      onSelect={loadIncident}
-                      onRefresh={loadHistory}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </main>
-      </div>
+            </div>
+          </>
+        )}
+      </main>
     </div>
   )
 }
