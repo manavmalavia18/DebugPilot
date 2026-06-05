@@ -39,7 +39,9 @@ from app.models import (
     ChatRequest,
     ChatResponse,
     IncidentChatMessage,
+    IncidentDetailResponse,
     IncidentHistoryMatchRead,
+    IncidentUpdateRequest,
     LogUpload,
     SavedIncident,
     SavedIncidentRead,
@@ -57,6 +59,46 @@ from app.storage import (
 )
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+def _feedback_from_db(value: int | None) -> str | None:
+    if value == 1:
+        return "up"
+    if value == -1:
+        return "down"
+    return None
+
+
+def _feedback_to_db(value: str | None) -> int | None:
+    if value == "up":
+        return 1
+    if value == "down":
+        return -1
+    return None
+
+
+def _saved_incident_read(row: SavedIncident) -> SavedIncidentRead:
+    return SavedIncidentRead(
+        id=row.id,
+        created_at=row.created_at,
+        category=row.category,
+        symptom=row.symptom,
+        root_cause=row.root_cause,
+        likely_fix=row.likely_fix,
+        confidence=row.confidence,
+        source_filename=row.source_filename,
+        resolution=row.resolution,
+        feedback=_feedback_from_db(row.feedback),
+    )
+
+
+def _incident_detail(row: SavedIncident) -> IncidentDetailResponse:
+    return IncidentDetailResponse(
+        **json.loads(row.response_json),
+        incident_id=row.id,
+        incident_feedback=_feedback_from_db(row.feedback),
+        incident_resolution=row.resolution,
+    )
 
 
 @asynccontextmanager
@@ -277,6 +319,8 @@ def analyze(
         cached=cached,
         duration_ms=duration_ms,
         incident_id=incident_id,
+        incident_feedback=None,
+        incident_resolution=None,
         incident_history_matches=[
             IncidentHistoryMatchRead(
                 incident_id=match.incident_id,
@@ -302,22 +346,10 @@ def list_incidents(
         .limit(limit)
     )
     rows = session.exec(query).all()
-    return [
-        SavedIncidentRead(
-            id=row.id,
-            created_at=row.created_at,
-            category=row.category,
-            symptom=row.symptom,
-            root_cause=row.root_cause,
-            likely_fix=row.likely_fix,
-            confidence=row.confidence,
-            source_filename=row.source_filename,
-        )
-        for row in rows
-    ]
+    return [_saved_incident_read(row) for row in rows]
 
 
-@app.get("/incidents/{incident_id}", response_model=AnalysisResult)
+@app.get("/incidents/{incident_id}", response_model=IncidentDetailResponse)
 def get_incident(
     incident_id: int,
     session: Session = Depends(get_session),
@@ -326,7 +358,27 @@ def get_incident(
     row = session.get(SavedIncident, incident_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Incident not found")
-    return AnalysisResult(**json.loads(row.response_json))
+    return _incident_detail(row)
+
+
+@app.patch("/incidents/{incident_id}", response_model=SavedIncidentRead)
+def update_incident(
+    incident_id: int,
+    request: IncidentUpdateRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    incident = _get_user_incident(session, user, incident_id)
+    if request.feedback is not None:
+        incident.feedback = _feedback_to_db(
+            None if request.feedback == "clear" else request.feedback
+        )
+    if request.resolution is not None:
+        incident.resolution = request.resolution.strip() or None
+    session.add(incident)
+    session.commit()
+    session.refresh(incident)
+    return _saved_incident_read(incident)
 
 
 def _get_user_incident(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import FollowUpChat from "./FollowUpChat"
 
-export default function FloatingChatPanel({ incidentId }) {
+export default function FloatingChatPanel({ incidentId, onSaveResolution }) {
   const [open, setOpen] = useState(false)
   const [lastIncidentId, setLastIncidentId] = useState(null)
   const [hasNewReply, setHasNewReply] = useState(false)
@@ -64,7 +64,7 @@ export default function FloatingChatPanel({ incidentId }) {
       </div>
 
       <div className="min-h-0 flex-1">
-        <FollowUpChat incidentId={incidentId} fullHeight floating />
+        <FollowUpChat incidentId={incidentId} fullHeight floating onSaveResolution={onSaveResolution} />
       </div>
     </div>
   )

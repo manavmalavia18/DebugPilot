@@ -25,6 +25,26 @@ engine = _create_engine()
 
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
+    _ensure_saved_incident_columns()
+
+
+def _ensure_saved_incident_columns() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "savedincident" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("savedincident")}
+    statements: list[str] = []
+    if "resolution" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN resolution VARCHAR(2000)")
+    if "feedback" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN feedback INTEGER")
+    if not statements:
+        return
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def get_session():

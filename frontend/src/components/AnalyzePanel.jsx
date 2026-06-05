@@ -49,7 +49,36 @@ export default function AnalyzePanel({
   onLoadPreset,
   onUploadFile,
   onLoadIncident,
+  onUpdateIncident,
 }) {
+  const [resolutionDraft, setResolutionDraft] = useState("")
+  const [savingResolution, setSavingResolution] = useState(false)
+  const [feedbackPending, setFeedbackPending] = useState(false)
+
+  useEffect(() => {
+    setResolutionDraft(result?.incident_resolution || "")
+  }, [result?.incident_id, result?.incident_resolution])
+
+  const submitFeedback = async (rating) => {
+    if (!incidentId || !onUpdateIncident || feedbackPending) return
+    const next = result?.incident_feedback === rating ? "clear" : rating
+    setFeedbackPending(true)
+    try {
+      await onUpdateIncident(incidentId, { feedback: next })
+    } finally {
+      setFeedbackPending(false)
+    }
+  }
+
+  const saveResolution = async () => {
+    if (!incidentId || !onUpdateIncident || savingResolution) return
+    setSavingResolution(true)
+    try {
+      await onUpdateIncident(incidentId, { resolution: resolutionDraft.trim() })
+    } finally {
+      setSavingResolution(false)
+    }
+  }
   const containerRef = useRef(null)
   const [leftWidthPct, setLeftWidthPct] = useState(() => loadStored(LEFT_WIDTH_KEY, 50, 30, 70))
   const lineCount = logText ? logText.split("\n").length : 1
@@ -174,6 +203,36 @@ export default function AnalyzePanel({
           </div>
           {result && (
             <div className="flex flex-wrap items-center justify-end gap-2">
+              {incidentId && onUpdateIncident && (
+                <div className="flex items-center gap-1 border border-border bg-void px-1 py-0.5">
+                  <button
+                    type="button"
+                    title="Helpful diagnosis"
+                    disabled={feedbackPending}
+                    onClick={() => submitFeedback("up")}
+                    className={`px-1.5 py-0.5 font-mono text-sm transition-colors ${
+                      result.incident_feedback === "up"
+                        ? "text-accent"
+                        : "text-neutral-500 hover:text-accent"
+                    }`}
+                  >
+                    👍
+                  </button>
+                  <button
+                    type="button"
+                    title="Not helpful"
+                    disabled={feedbackPending}
+                    onClick={() => submitFeedback("down")}
+                    className={`px-1.5 py-0.5 font-mono text-sm transition-colors ${
+                      result.incident_feedback === "down"
+                        ? "text-danger"
+                        : "text-neutral-500 hover:text-danger"
+                    }`}
+                  >
+                    👎
+                  </button>
+                </div>
+              )}
               {typeof result.cached === "boolean" && (
                 <span
                   className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${
@@ -290,11 +349,44 @@ export default function AnalyzePanel({
             {result.warnings?.length > 0 && (
               <ListBlock title="Warnings" items={result.warnings} warn />
             )}
+
+            {incidentId && onUpdateIncident && (
+              <div className="mb-4 border border-border bg-void p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">
+                  Confirmed fix
+                </p>
+                <p className="mb-2 text-xs text-muted">
+                  Save what actually worked — future similar logs will prefer this resolution.
+                </p>
+                <textarea
+                  value={resolutionDraft}
+                  onChange={(e) => setResolutionDraft(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Set REDIS_URL to redis://debugpilot-redis:6379/0 in Helm values"
+                  className="mb-2 w-full resize-none border border-border bg-black px-3 py-2 font-mono text-[12px] leading-relaxed text-neutral-200 outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={saveResolution}
+                  disabled={savingResolution || !resolutionDraft.trim()}
+                  className="border border-accent bg-accent/10 px-3 py-1.5 font-mono text-[11px] text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {savingResolution ? "Saving..." : "Save resolution"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
 
-      <FloatingChatPanel incidentId={result && incidentId ? incidentId : null} />
+      <FloatingChatPanel
+        incidentId={result && incidentId ? incidentId : null}
+        onSaveResolution={
+          incidentId && onUpdateIncident
+            ? (text) => onUpdateIncident(incidentId, { resolution: text })
+            : undefined
+        }
+      />
     </div>
   )
 }

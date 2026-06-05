@@ -69,6 +69,20 @@ class AnalyzeResponse(AnalysisResult):
         default_factory=list,
         description="Past saved incidents injected into this analysis context",
     )
+    incident_feedback: Optional[Literal["up", "down"]] = Field(
+        default=None,
+        description="User rating for this saved incident when save=true",
+    )
+    incident_resolution: Optional[str] = Field(
+        default=None,
+        description="Confirmed fix notes saved on this incident",
+    )
+
+
+class IncidentDetailResponse(AnalysisResult):
+    incident_id: int
+    incident_feedback: Optional[Literal["up", "down"]] = None
+    incident_resolution: Optional[str] = None
 
 
 class User(SQLModel, table=True):
@@ -118,6 +132,8 @@ class SavedIncident(SQLModel, table=True):
     likely_fix: str
     confidence: str
     response_json: str
+    resolution: Optional[str] = SQLField(default=None, max_length=2000)
+    feedback: Optional[int] = SQLField(default=None)  # 1 = helpful, -1 = not helpful
 
 
 class IncidentChatMessage(SQLModel, table=True):
@@ -138,6 +154,13 @@ class SavedIncidentRead(BaseModel):
     likely_fix: str
     confidence: str
     source_filename: Optional[str] = None
+    resolution: Optional[str] = None
+    feedback: Optional[Literal["up", "down"]] = None
+
+
+class IncidentUpdateRequest(BaseModel):
+    feedback: Optional[Literal["up", "down", "clear"]] = None
+    resolution: Optional[str] = Field(default=None, max_length=2000)
 
 
 class ChatMessageRead(BaseModel):

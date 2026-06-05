@@ -129,13 +129,32 @@ export default function App() {
   const loadIncident = async (id) => {
     try {
       const res = await api.get(`/incidents/${id}`)
-      setResult({ ...res.data, cached: undefined, duration_ms: undefined })
-      setIncidentId(id)
+      setResult({
+        ...res.data,
+        cached: undefined,
+        duration_ms: undefined,
+      })
+      setIncidentId(res.data.incident_id ?? id)
       setView("analyze")
       setError("")
     } catch (err) {
       setError(err.response?.data?.detail || err.message)
     }
+  }
+
+  const updateIncident = async (id, payload) => {
+    const res = await api.patch(`/incidents/${id}`, payload)
+    setResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            incident_feedback: res.data.feedback,
+            incident_resolution: res.data.resolution,
+          }
+        : prev
+    )
+    loadHistory()
+    return res.data
   }
 
   const logout = async () => {
@@ -246,6 +265,7 @@ export default function App() {
                   onLoadPreset={loadPreset}
                   onUploadFile={uploadLogFile}
                   onLoadIncident={loadIncident}
+                  onUpdateIncident={updateIncident}
                 />
               ) : (
                 <div className="h-full overflow-y-auto">

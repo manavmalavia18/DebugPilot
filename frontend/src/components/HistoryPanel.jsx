@@ -54,6 +54,11 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                     <span className="inline-flex items-center gap-2 text-xs capitalize text-neutral-400">
                       <span className={`h-1.5 w-1.5 ${confidenceDot(item.confidence)}`} />
                       {item.confidence}
+                      {item.resolution && (
+                        <span className="text-accent" title="Has confirmed fix">
+                          ✓
+                        </span>
+                      )}
                     </span>
                   </td>
                 </tr>

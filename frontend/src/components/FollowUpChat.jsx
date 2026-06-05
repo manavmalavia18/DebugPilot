@@ -108,12 +108,37 @@ function ChatMessageBody({ content }) {
   )
 }
 
-export default function FollowUpChat({ incidentId, fullHeight = false, floating = false }) {
+export default function FollowUpChat({ incidentId, fullHeight = false, floating = false, onSaveResolution }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [savingResolution, setSavingResolution] = useState(false)
   const bottomRef = useRef(null)
+
+  const lastAssistant = [...messages].reverse().find((msg) => msg.role === "assistant")
+
+  const extractFixText = (content) => {
+    const sections = parseStructuredMessage(content)
+    const fix = sections?.find((section) => section.label === "Fix")
+    if (fix?.body) return fix.body.replace(/^[-*]\s*/gm, "").trim()
+    return stripMarkdown(content).trim()
+  }
+
+  const saveLastReplyAsResolution = async () => {
+    if (!lastAssistant || !onSaveResolution || savingResolution) return
+    const text = extractFixText(lastAssistant.content)
+    if (!text) return
+    setSavingResolution(true)
+    setError("")
+    try {
+      await onSaveResolution(text)
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || "Failed to save resolution")
+    } finally {
+      setSavingResolution(false)
+    }
+  }
 
   useEffect(() => {
     if (!incidentId) {
@@ -228,6 +253,16 @@ export default function FollowUpChat({ incidentId, fullHeight = false, floating 
       )}
 
       <div className={`shrink-0 space-y-2 border-t border-border bg-void/40 ${floating ? "p-3" : "p-4"}`}>
+        {lastAssistant && onSaveResolution && (
+          <button
+            type="button"
+            onClick={saveLastReplyAsResolution}
+            disabled={savingResolution}
+            className="w-full border border-border py-2 font-mono text-[11px] text-neutral-400 transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-40"
+          >
+            {savingResolution ? "Saving resolution..." : "Save last reply as resolution"}
+          </button>
+        )}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
