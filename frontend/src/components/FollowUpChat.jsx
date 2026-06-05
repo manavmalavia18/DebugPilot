@@ -1,6 +1,113 @@
 import { useEffect, useRef, useState } from "react"
 import { api } from "../api"
 
+const SECTION_ORDER = ["SUMMARY", "FIX", "COMMANDS", "WARNINGS"]
+
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[-*]\s+/gm, "- ")
+}
+
+function parseStructuredMessage(content) {
+  const normalized = stripMarkdown(content.trim())
+  const lines = normalized.split("\n")
+  const rawSections = []
+  let current = null
+
+  for (const line of lines) {
+    const header = line.match(/^(SUMMARY|FIX|COMMANDS|WARNINGS):\s*(.*)$/i)
+    if (header) {
+      if (current) rawSections.push(current)
+      current = { label: header[1].toUpperCase(), body: header[2].trim() }
+      continue
+    }
+    if (current && line.trim()) {
+      current.body = current.body ? `${current.body}\n${line.trim()}` : line.trim()
+    }
+  }
+  if (current) rawSections.push(current)
+  if (!rawSections.length) return null
+
+  return rawSections
+    .filter((section) => SECTION_ORDER.includes(section.label))
+    .sort((a, b) => SECTION_ORDER.indexOf(a.label) - SECTION_ORDER.indexOf(b.label))
+    .map((section) => ({
+      label: section.label.charAt(0) + section.label.slice(1).toLowerCase(),
+      body: section.body,
+    }))
+}
+
+function parseListLines(body) {
+  return body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*]\s*/, ""))
+}
+
+function ChatSection({ label, body, warn = false }) {
+  const lines = parseListLines(body)
+  const isCommandBlock = label === "Commands"
+  const isList = label === "Fix" || label === "Warnings" || isCommandBlock
+
+  return (
+    <div
+      className={`border p-2.5 ${
+        warn
+          ? "border-warn/30 bg-warn/5"
+          : label === "Fix"
+            ? "border-accent/30 bg-accent/5"
+            : "border-border bg-void"
+      }`}
+    >
+      <p className="font-mono text-[10px] uppercase tracking-wider text-muted">{label}</p>
+      {isList ? (
+        <ul className="mt-1.5 space-y-1.5">
+          {lines.map((line) => (
+            <li
+              key={line}
+              className={`text-sm leading-relaxed ${
+                isCommandBlock ? "border border-border bg-black px-2 py-1.5 font-mono text-[12px] text-accent" : "text-neutral-200"
+              }`}
+            >
+              {isCommandBlock ? line : `• ${line}`}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1.5 text-sm leading-relaxed text-neutral-200">{body}</p>
+      )}
+    </div>
+  )
+}
+
+function ChatMessageBody({ content }) {
+  const sections = parseStructuredMessage(content)
+
+  if (sections) {
+    return (
+      <div className="mt-2 space-y-2">
+        {sections.map((section) => (
+          <ChatSection
+            key={section.label}
+            label={section.label}
+            body={section.body}
+            warn={section.label === "Warnings"}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-neutral-200">
+      {stripMarkdown(content)}
+    </p>
+  )
+}
+
 export default function FollowUpChat({ incidentId, fullHeight = false }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
@@ -88,7 +195,7 @@ export default function FollowUpChat({ incidentId, fullHeight = false }) {
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`rounded border px-3 py-2.5 text-[13px] leading-relaxed ${
+            className={`rounded border px-3 py-2.5 ${
               msg.role === "user"
                 ? "border-border bg-void text-neutral-200"
                 : "border-accent/30 bg-accent/8 text-neutral-100"
@@ -101,7 +208,11 @@ export default function FollowUpChat({ incidentId, fullHeight = false }) {
             >
               {msg.role === "user" ? "You" : "DebugPilot"}
             </span>
-            <p className="mt-1.5 whitespace-pre-wrap">{msg.content}</p>
+            {msg.role === "user" ? (
+              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+            ) : (
+              <ChatMessageBody content={msg.content} />
+            )}
           </div>
         ))}
         {loading && (

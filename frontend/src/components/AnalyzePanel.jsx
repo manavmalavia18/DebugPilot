@@ -15,10 +15,11 @@ const SOURCE_OPTIONS = [
 const LEFT_WIDTH_KEY = "debugpilot:leftWidth"
 const RIGHT_SPLIT_KEY = "debugpilot:rightSplit"
 
-function loadStored(key, fallback) {
+function loadStored(key, fallback, min, max) {
   try {
     const value = Number(localStorage.getItem(key))
-    return Number.isFinite(value) ? value : fallback
+    if (!Number.isFinite(value)) return fallback
+    return Math.min(max, Math.max(min, value))
   } catch {
     return fallback
   }
@@ -51,8 +52,8 @@ export default function AnalyzePanel({
 }) {
   const containerRef = useRef(null)
   const rightColumnRef = useRef(null)
-  const [leftWidthPct, setLeftWidthPct] = useState(() => loadStored(LEFT_WIDTH_KEY, 50))
-  const [rightSplitPct, setRightSplitPct] = useState(() => loadStored(RIGHT_SPLIT_KEY, 58))
+  const [leftWidthPct, setLeftWidthPct] = useState(() => loadStored(LEFT_WIDTH_KEY, 50, 30, 70))
+  const [rightSplitPct, setRightSplitPct] = useState(() => loadStored(RIGHT_SPLIT_KEY, 58, 35, 80))
   const lineCount = logText ? logText.split("\n").length : 1
   const showChat = Boolean(result && incidentId)
 
@@ -178,10 +179,13 @@ export default function AnalyzePanel({
 
       <ResizeHandle direction="horizontal" onResize={resizeLeftColumn} />
 
-      <div ref={rightColumnRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={rightColumnRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
         <section
           className="flex min-h-0 flex-col border border-border bg-panel"
-          style={{ height: showChat ? `${rightSplitPct}%` : "100%" }}
+          style={{
+            flex: showChat ? `${rightSplitPct} 1 0%` : "1 1 0%",
+            minHeight: showChat ? 180 : undefined,
+          }}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
             <div>
@@ -286,7 +290,10 @@ export default function AnalyzePanel({
         {showChat && (
           <>
             <ResizeHandle direction="vertical" onResize={resizeRightColumn} />
-            <div className="min-h-0 flex-1">
+            <div
+              className="flex min-h-0 flex-col"
+              style={{ flex: `${100 - rightSplitPct} 1 0%`, minHeight: 180 }}
+            >
               <FollowUpChat incidentId={incidentId} fullHeight />
             </div>
           </>
