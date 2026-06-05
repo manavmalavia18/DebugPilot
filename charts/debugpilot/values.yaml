@@ -25,7 +25,4 @@ api:
   uploadsS3Bucket: debugpilot-log-uploads-565273632019
   awsRegion: us-east-1
   persistence:
-    enabled: true
-    size: 1Gi
-    mountPath: /app/data
-    databasePath: /app/data/debugpilot.db
+    enabled: false

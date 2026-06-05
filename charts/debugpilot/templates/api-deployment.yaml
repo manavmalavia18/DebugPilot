@@ -61,6 +61,12 @@ spec:
                   name: {{ .Values.api.anthropicSecretName }}
                   key: JWT_SECRET
                   optional: true
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.anthropicSecretName }}
+                  key: DATABASE_URL
+                  optional: true
             {{- if .Values.api.uploadsS3Bucket }}
             - name: UPLOADS_S3_BUCKET
               value: {{ .Values.api.uploadsS3Bucket | quote }}
