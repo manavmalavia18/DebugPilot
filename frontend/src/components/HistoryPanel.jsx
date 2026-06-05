@@ -59,6 +59,16 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                           ✓
                         </span>
                       )}
+                      {item.feedback === "up" && (
+                        <span className="text-accent" title="Marked helpful">
+                          +
+                        </span>
+                      )}
+                      {item.feedback === "down" && (
+                        <span className="text-danger" title="Marked not helpful">
+                          −
+                        </span>
+                      )}
                     </span>
                   </td>
                 </tr>

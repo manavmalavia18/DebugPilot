@@ -54,17 +54,25 @@ export default function AnalyzePanel({
   const [resolutionDraft, setResolutionDraft] = useState("")
   const [savingResolution, setSavingResolution] = useState(false)
   const [feedbackPending, setFeedbackPending] = useState(false)
+  const [feedbackSaved, setFeedbackSaved] = useState("")
 
   useEffect(() => {
     setResolutionDraft(result?.incident_resolution || "")
   }, [result?.incident_id, result?.incident_resolution])
 
+  useEffect(() => {
+    setFeedbackSaved("")
+  }, [result?.incident_id, result?.incident_feedback])
+
   const submitFeedback = async (rating) => {
     if (!incidentId || !onUpdateIncident || feedbackPending) return
     const next = result?.incident_feedback === rating ? "clear" : rating
     setFeedbackPending(true)
+    setFeedbackSaved("")
     try {
       await onUpdateIncident(incidentId, { feedback: next })
+      setFeedbackSaved(next === "clear" ? "cleared" : next)
+      window.setTimeout(() => setFeedbackSaved(""), 2000)
     } finally {
       setFeedbackPending(false)
     }
@@ -204,33 +212,44 @@ export default function AnalyzePanel({
           {result && (
             <div className="flex flex-wrap items-center justify-end gap-2">
               {incidentId && onUpdateIncident && (
-                <div className="flex items-center gap-1 border border-border bg-void px-1 py-0.5">
-                  <button
-                    type="button"
-                    title="Helpful diagnosis"
-                    disabled={feedbackPending}
-                    onClick={() => submitFeedback("up")}
-                    className={`px-1.5 py-0.5 font-mono text-sm transition-colors ${
-                      result.incident_feedback === "up"
-                        ? "text-accent"
-                        : "text-neutral-500 hover:text-accent"
-                    }`}
-                  >
-                    👍
-                  </button>
-                  <button
-                    type="button"
-                    title="Not helpful"
-                    disabled={feedbackPending}
-                    onClick={() => submitFeedback("down")}
-                    className={`px-1.5 py-0.5 font-mono text-sm transition-colors ${
-                      result.incident_feedback === "down"
-                        ? "text-danger"
-                        : "text-neutral-500 hover:text-danger"
-                    }`}
-                  >
-                    👎
-                  </button>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 border border-border bg-void p-0.5">
+                    <button
+                      type="button"
+                      title="Helpful diagnosis"
+                      disabled={feedbackPending}
+                      onClick={() => submitFeedback("up")}
+                      className={`px-2 py-0.5 font-mono text-[10px] uppercase transition-colors ${
+                        result.incident_feedback === "up"
+                          ? "border border-accent bg-accent/25 text-accent"
+                          : "border border-transparent text-neutral-500 hover:text-accent"
+                      }`}
+                    >
+                      Helpful
+                    </button>
+                    <button
+                      type="button"
+                      title="Not helpful"
+                      disabled={feedbackPending}
+                      onClick={() => submitFeedback("down")}
+                      className={`px-2 py-0.5 font-mono text-[10px] uppercase transition-colors ${
+                        result.incident_feedback === "down"
+                          ? "border border-danger bg-danger/20 text-danger"
+                          : "border border-transparent text-neutral-500 hover:text-danger"
+                      }`}
+                    >
+                      Not helpful
+                    </button>
+                  </div>
+                  {feedbackSaved === "up" && (
+                    <span className="font-mono text-[10px] text-accent">Saved</span>
+                  )}
+                  {feedbackSaved === "down" && (
+                    <span className="font-mono text-[10px] text-danger">Saved</span>
+                  )}
+                  {feedbackSaved === "cleared" && (
+                    <span className="font-mono text-[10px] text-muted">Cleared</span>
+                  )}
                 </div>
               )}
               {typeof result.cached === "boolean" && (
