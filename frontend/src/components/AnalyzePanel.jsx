@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { SAMPLE_PRESETS } from "../data/samples"
-import FollowUpChat from "./FollowUpChat"
+import FloatingChatPanel from "./FloatingChatPanel"
 import ResizeHandle from "./ResizeHandle"
 
 const SOURCE_OPTIONS = [
@@ -13,7 +13,6 @@ const SOURCE_OPTIONS = [
 ]
 
 const LEFT_WIDTH_KEY = "debugpilot:leftWidth"
-const RIGHT_SPLIT_KEY = "debugpilot:rightSplit"
 
 function loadStored(key, fallback, min, max) {
   try {
@@ -51,19 +50,12 @@ export default function AnalyzePanel({
   onUploadFile,
 }) {
   const containerRef = useRef(null)
-  const rightColumnRef = useRef(null)
   const [leftWidthPct, setLeftWidthPct] = useState(() => loadStored(LEFT_WIDTH_KEY, 50, 30, 70))
-  const [rightSplitPct, setRightSplitPct] = useState(() => loadStored(RIGHT_SPLIT_KEY, 58, 35, 80))
   const lineCount = logText ? logText.split("\n").length : 1
-  const showChat = Boolean(result && incidentId)
 
   useEffect(() => {
     localStorage.setItem(LEFT_WIDTH_KEY, String(leftWidthPct))
   }, [leftWidthPct])
-
-  useEffect(() => {
-    localStorage.setItem(RIGHT_SPLIT_KEY, String(rightSplitPct))
-  }, [rightSplitPct])
 
   const resizeLeftColumn = useCallback((delta) => {
     const container = containerRef.current
@@ -72,15 +64,8 @@ export default function AnalyzePanel({
     setLeftWidthPct((prev) => Math.min(70, Math.max(30, prev + deltaPct)))
   }, [])
 
-  const resizeRightColumn = useCallback((delta) => {
-    const column = rightColumnRef.current
-    if (!column) return
-    const deltaPct = (delta / column.clientHeight) * 100
-    setRightSplitPct((prev) => Math.min(80, Math.max(35, prev + deltaPct)))
-  }, [])
-
   return (
-    <div ref={containerRef} className="flex h-full min-h-0">
+    <div ref={containerRef} className="relative flex h-full min-h-0">
       <section
         className="flex min-h-0 min-w-0 flex-col border border-border bg-panel"
         style={{ width: `${leftWidthPct}%` }}
@@ -179,126 +164,108 @@ export default function AnalyzePanel({
 
       <ResizeHandle direction="horizontal" onResize={resizeLeftColumn} />
 
-      <div ref={rightColumnRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        <section
-          className="flex min-h-0 flex-col border border-border bg-panel"
-          style={{
-            flex: showChat ? `${rightSplitPct} 1 0%` : "1 1 0%",
-            minHeight: showChat ? 180 : undefined,
-          }}
-        >
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
-            <div>
-              <h2 className="font-mono text-sm font-semibold">Diagnosis output</h2>
-              <p className="text-xs text-muted">Structured root cause, commands, and fix</p>
-            </div>
-            {result && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {typeof result.cached === "boolean" && (
-                  <span
-                    className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${
-                      result.cached
-                        ? "border-info/40 bg-info/10 text-info"
-                        : "border-accent/40 bg-accent/10 text-accent"
-                    }`}
-                  >
-                    {result.cached ? "Redis cache" : "Claude"}
-                    {typeof result.duration_ms === "number" ? ` · ${result.duration_ms}ms` : ""}
-                  </span>
-                )}
-                <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${confidenceBadge(result.confidence)}`}>
-                  {result.confidence}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col border border-border bg-panel">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+          <div>
+            <h2 className="font-mono text-sm font-semibold">Diagnosis output</h2>
+            <p className="text-xs text-muted">Structured root cause, commands, and fix</p>
+          </div>
+          {result && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {typeof result.cached === "boolean" && (
+                <span
+                  className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                    result.cached
+                      ? "border-info/40 bg-info/10 text-info"
+                      : "border-accent/40 bg-accent/10 text-accent"
+                  }`}
+                >
+                  {result.cached ? "Redis cache" : "Claude"}
+                  {typeof result.duration_ms === "number" ? ` · ${result.duration_ms}ms` : ""}
                 </span>
+              )}
+              <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${confidenceBadge(result.confidence)}`}>
+                {result.confidence}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {!result && (
+          <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
+            <p className="font-mono text-4xl text-neutral-700">⌬</p>
+            <p className="mt-2 font-mono text-sm text-neutral-400">No diagnosis yet</p>
+            <p className="mt-1 max-w-xs text-xs text-muted">
+              Paste a log or load a sample, then run analysis
+            </p>
+          </div>
+        )}
+
+        {result && (
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="mb-3 inline-block border border-border bg-void px-2 py-1 font-mono text-[11px] uppercase text-info">
+              {result.category}
+            </div>
+
+            <DiagnosisBlock title="Symptom" content={result.symptom} />
+            <DiagnosisBlock title="What failed" content={result.what_failed} />
+            <DiagnosisBlock title="Root cause" content={result.root_cause} highlight />
+            <DiagnosisBlock title="Likely fix" content={result.likely_fix} highlight />
+
+            {(result.playbook_matches?.length > 0 || result.similar_incidents?.length > 0) && (
+              <div className="mb-4 border border-border bg-void p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Matched playbooks</p>
+                <div className="flex flex-wrap gap-2">
+                  {(result.playbook_matches?.length
+                    ? result.playbook_matches
+                    : result.similar_incidents.map((name) => ({ name, score: null, method: "keyword" }))
+                  ).map((match) => (
+                    <span
+                      key={match.name}
+                      className={`border px-2 py-0.5 font-mono text-[11px] ${
+                        match.method === "semantic"
+                          ? "border-info/40 bg-info/10 text-info"
+                          : "border-border text-neutral-300"
+                      }`}
+                    >
+                      {match.name}
+                      {typeof match.score === "number" ? ` · ${Math.round(match.score * 100)}%` : ""}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
+
+            <div className="mb-4 border border-border bg-void p-3">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Debug commands</p>
+              <ul className="space-y-2">
+                {result.debug_commands.map((cmd) => (
+                  <li key={cmd} className="flex items-start gap-2 border border-border bg-black p-2">
+                    <code className="flex-1 break-all font-mono text-[12px] text-accent">{cmd}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyText(cmd)}
+                      className="shrink-0 border border-border px-2 py-0.5 font-mono text-[10px] text-neutral-400 hover:text-accent"
+                    >
+                      copy
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {result.prevention?.length > 0 && (
+              <ListBlock title="Prevention" items={result.prevention} />
+            )}
+
+            {result.warnings?.length > 0 && (
+              <ListBlock title="Warnings" items={result.warnings} warn />
+            )}
           </div>
-
-          {!result && (
-            <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
-              <p className="font-mono text-4xl text-neutral-700">⌬</p>
-              <p className="mt-2 font-mono text-sm text-neutral-400">No diagnosis yet</p>
-              <p className="mt-1 max-w-xs text-xs text-muted">
-                Paste a log or load a sample, then run analysis
-              </p>
-            </div>
-          )}
-
-          {result && (
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              <div className="mb-3 inline-block border border-border bg-void px-2 py-1 font-mono text-[11px] uppercase text-info">
-                {result.category}
-              </div>
-
-              <DiagnosisBlock title="Symptom" content={result.symptom} />
-              <DiagnosisBlock title="What failed" content={result.what_failed} />
-              <DiagnosisBlock title="Root cause" content={result.root_cause} highlight />
-              <DiagnosisBlock title="Likely fix" content={result.likely_fix} highlight />
-
-              {(result.playbook_matches?.length > 0 || result.similar_incidents?.length > 0) && (
-                <div className="mb-4 border border-border bg-void p-3">
-                  <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Matched playbooks</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(result.playbook_matches?.length
-                      ? result.playbook_matches
-                      : result.similar_incidents.map((name) => ({ name, score: null, method: "keyword" }))
-                    ).map((match) => (
-                      <span
-                        key={match.name}
-                        className={`border px-2 py-0.5 font-mono text-[11px] ${
-                          match.method === "semantic"
-                            ? "border-info/40 bg-info/10 text-info"
-                            : "border-border text-neutral-300"
-                        }`}
-                      >
-                        {match.name}
-                        {typeof match.score === "number" ? ` · ${Math.round(match.score * 100)}%` : ""}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-4 border border-border bg-void p-3">
-                <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Debug commands</p>
-                <ul className="space-y-2">
-                  {result.debug_commands.map((cmd) => (
-                    <li key={cmd} className="flex items-start gap-2 border border-border bg-black p-2">
-                      <code className="flex-1 break-all font-mono text-[12px] text-accent">{cmd}</code>
-                      <button
-                        type="button"
-                        onClick={() => copyText(cmd)}
-                        className="shrink-0 border border-border px-2 py-0.5 font-mono text-[10px] text-neutral-400 hover:text-accent"
-                      >
-                        copy
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {result.prevention?.length > 0 && (
-                <ListBlock title="Prevention" items={result.prevention} />
-              )}
-
-              {result.warnings?.length > 0 && (
-                <ListBlock title="Warnings" items={result.warnings} warn />
-              )}
-            </div>
-          )}
-        </section>
-
-        {showChat && (
-          <>
-            <ResizeHandle direction="vertical" onResize={resizeRightColumn} />
-            <div
-              className="flex min-h-0 flex-col"
-              style={{ flex: `${100 - rightSplitPct} 1 0%`, minHeight: 180 }}
-            >
-              <FollowUpChat incidentId={incidentId} fullHeight />
-            </div>
-          </>
         )}
-      </div>
+      </section>
+
+      <FloatingChatPanel incidentId={result && incidentId ? incidentId : null} />
     </div>
   )
 }
