@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 from dataclasses import dataclass
@@ -112,10 +113,16 @@ def _playbook_vectors() -> tuple[tuple[str, str, tuple[float, ...]], ...]:
 
 
 def warmup_playbook_index() -> None:
-    """Pre-load embedding model and playbook vectors (e.g. Docker build or app startup)."""
+    """Pre-load embedding model and playbook vectors at app startup (best-effort)."""
     if not semantic_rag_enabled():
         return
-    _playbook_vectors()
+    try:
+        _playbook_vectors()
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Playbook embedding warmup failed (%s); keyword RAG will be used until the model loads",
+            exc,
+        )
 
 
 def _keyword_matches(log_text: str, limit: int) -> list[PlaybookMatch]:
