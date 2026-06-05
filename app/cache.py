@@ -6,7 +6,7 @@ from typing import Any, Optional
 import redis
 
 TTL_SECONDS = int(os.getenv("REDIS_CACHE_TTL_SECONDS", "604800"))
-CACHE_VERSION = os.getenv("ANALYSIS_CACHE_VERSION", "2")
+CACHE_VERSION = os.getenv("ANALYSIS_CACHE_VERSION", "3")
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 KEY_PREFIX = "debugpilot:analysis"
 

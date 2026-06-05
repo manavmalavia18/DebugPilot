@@ -16,6 +16,7 @@ from app.retrieval import (
 
 INCIDENT_HISTORY_LIMIT = int(os.getenv("INCIDENT_HISTORY_LIMIT", "50"))
 INCIDENT_RETRIEVAL_LIMIT = int(os.getenv("INCIDENT_RETRIEVAL_LIMIT", "3"))
+INCIDENT_DISPLAY_LIMIT = int(os.getenv("INCIDENT_DISPLAY_LIMIT", "2"))
 MIN_KEYWORD_OVERLAP = int(os.getenv("INCIDENT_KEYWORD_MIN_OVERLAP", "4"))
 
 
@@ -30,22 +31,30 @@ class IncidentHistoryMatch:
 
 def _incident_content(row: SavedIncident) -> str:
     log_excerpt = row.log_text[:1500].strip()
-    return (
-        f"Category: {row.category}\n"
-        f"Symptom: {row.symptom}\n"
-        f"Root cause: {row.root_cause}\n"
-        f"Likely fix: {row.likely_fix}\n"
-        f"Confidence: {row.confidence}\n"
-        f"Log excerpt:\n{log_excerpt}"
+    parts = [
+        f"Category: {row.category}",
+        f"Symptom: {row.symptom}",
+        f"Root cause: {row.root_cause}",
+        f"Likely fix: {row.likely_fix}",
+    ]
+    if row.resolution:
+        parts.append(f"Confirmed resolution: {row.resolution}")
+    parts.extend(
+        [
+            f"Confidence: {row.confidence}",
+            f"Log excerpt:\n{log_excerpt}",
+        ]
     )
+    return "\n".join(parts)
 
 
 def _incident_embed_text(row: SavedIncident) -> str:
+    resolution = f"\nConfirmed resolution: {row.resolution}" if row.resolution else ""
     return (
         f"{row.log_text[:LOG_EMBED_MAX_CHARS]}\n"
         f"Symptom: {row.symptom}\n"
         f"Root cause: {row.root_cause}\n"
-        f"Fix: {row.likely_fix}"
+        f"Fix: {row.likely_fix}{resolution}"
     )
 
 
@@ -115,14 +124,31 @@ def _semantic_incident_matches(
     return scored[:limit]
 
 
+def dedupe_incident_history_matches(
+    matches: list[IncidentHistoryMatch],
+    limit: int = INCIDENT_DISPLAY_LIMIT,
+) -> list[IncidentHistoryMatch]:
+    seen: set[str] = set()
+    deduped: list[IncidentHistoryMatch] = []
+    for match in matches:
+        key = match.symptom.strip().lower()[:120] if match.symptom else str(match.incident_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(match)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
 def incidents_for_llm_context(matches: list[IncidentHistoryMatch]) -> list[IncidentHistoryMatch]:
     if not matches:
         return []
     strong = [match for match in matches if match.score >= RETRIEVAL_CONTEXT_MIN_SCORE]
     if strong:
-        return strong
+        return dedupe_incident_history_matches(strong)
     if matches[0].method == "keyword":
-        return matches[:1]
+        return dedupe_incident_history_matches(matches[:1])
     return []
 
 
@@ -141,6 +167,7 @@ def find_similar_saved_incidents(
         .order_by(SavedIncident.created_at.desc())
         .limit(INCIDENT_HISTORY_LIMIT)
     ).all()
+    rows = [row for row in rows if row.feedback != -1]
     if not rows:
         return []
 
