@@ -103,6 +103,31 @@ def test_incidents_for_llm_context_requires_strong_semantic_match():
     assert weak == []
 
 
+def test_find_similar_saved_incidents_weak_semantic_falls_back_to_keyword(session, monkeypatch):
+    db, user_id = session
+
+    def weak_embed(text: str):
+        # Similar enough to rank but below RETRIEVAL_CONTEXT_MIN_SCORE (0.70).
+        if "6379" in text or "redis" in text.lower():
+            if "terraform" in text.lower() or "state lock" in text.lower():
+                return [0.0, 0.0, 1.0]
+            if "Symptom:" in text or "Root cause:" in text or "Fix:" in text:
+                return [0.6, 0.0, 0.0]
+            return [0.6, 0.8, 0.0]
+        if "terraform" in text.lower() or "state lock" in text.lower():
+            return [0.0, 0.0, 1.0]
+        return [0.0, 0.0, 1.0]
+
+    monkeypatch.setenv("SEMANTIC_RAG_DISABLED", "0")
+    monkeypatch.setattr("app.incident_retrieval._embed_text", weak_embed)
+
+    log = "CrashLoopBackOff connection refused localhost:6379 redis cache unreachable"
+    matches = find_similar_saved_incidents(db, user_id, log, limit=2)
+    assert matches
+    assert matches[0].method == "keyword"
+    assert matches[0].incident_id == 1
+
+
 def test_format_incident_history_context_includes_past_fix():
     from app.incident_retrieval import IncidentHistoryMatch
 
