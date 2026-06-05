@@ -36,26 +36,26 @@ export default function AnalyzePanel({
   const lineCount = logText ? logText.split("\n").length : 1
 
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid h-full min-h-0 gap-3 xl:grid-cols-2">
       {/* Input */}
-      <section className="border border-border bg-panel">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <section className="flex min-h-0 flex-col border border-border bg-panel">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <div>
             <h2 className="font-mono text-sm font-semibold">Error log input</h2>
-            <p className="text-xs text-muted">Paste or upload kubectl, Terraform, CI, or stack trace output</p>
+            <p className="text-[11px] text-muted">Paste or upload kubectl, Terraform, CI output</p>
           </div>
           <span className="font-mono text-[10px] text-muted">{lineCount} lines</span>
         </div>
 
-        <div className="border-b border-border px-4 py-3">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">Quick samples</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="shrink-0 border-b border-border px-3 py-2">
+          <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">Quick samples</p>
+          <div className="flex flex-wrap gap-1.5">
             {SAMPLE_PRESETS.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
                 onClick={() => onLoadPreset(preset)}
-                className="border border-border bg-void px-2.5 py-1 font-mono text-[11px] text-neutral-300 transition-colors hover:border-accent/50 hover:text-accent"
+                className="border border-border bg-void px-2 py-0.5 font-mono text-[10px] text-neutral-300 transition-colors hover:border-accent/50 hover:text-accent"
               >
                 {preset.label}
               </button>
@@ -63,24 +63,23 @@ export default function AnalyzePanel({
           </div>
         </div>
 
-        <div className="px-4 py-3">
-          <label htmlFor="source" className="mb-1.5 block font-mono text-[10px] uppercase tracking-wider text-muted">
-            Source hint
-          </label>
-          <select
-            id="source"
-            value={sourceHint}
-            onChange={(e) => setSourceHint(e.target.value)}
-            className="mb-3 w-full border border-border bg-void px-3 py-2 font-mono text-sm text-neutral-200 outline-none focus:border-accent"
-          >
-            {SOURCE_OPTIONS.map((opt) => (
-              <option key={opt.value || "auto"} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <label className="cursor-pointer border border-border bg-void px-3 py-2 font-mono text-[11px] text-neutral-300 transition-colors hover:border-accent/50 hover:text-accent">
-              {uploading ? "Uploading..." : "Upload .log / .txt"}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2">
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+            <label htmlFor="source" className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              Source
+            </label>
+            <select
+              id="source"
+              value={sourceHint}
+              onChange={(e) => setSourceHint(e.target.value)}
+              className="border border-border bg-void px-2 py-1 font-mono text-[11px] text-neutral-200 outline-none focus:border-accent"
+            >
+              {SOURCE_OPTIONS.map((opt) => (
+                <option key={opt.value || "auto"} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <label className="cursor-pointer border border-border bg-void px-2 py-1 font-mono text-[10px] text-neutral-300 transition-colors hover:border-accent/50 hover:text-accent">
+              {uploading ? "Uploading..." : "Upload .log"}
               <input
                 type="file"
                 accept=".log,.txt,.json,.out,.err,text/plain"
@@ -94,16 +93,16 @@ export default function AnalyzePanel({
               />
             </label>
             {uploadFilename && (
-              <span className="border border-info/30 bg-info/10 px-2 py-1 font-mono text-[10px] text-info">
+              <span className="border border-info/30 bg-info/10 px-1.5 py-0.5 font-mono text-[10px] text-info">
                 {uploadFilename}
               </span>
             )}
           </div>
 
-          <div className="relative">
-            <div className="absolute left-0 top-0 bottom-0 w-10 border-r border-border bg-black/40 pt-3 text-right font-mono text-[10px] leading-5 text-neutral-600 select-none">
-              {Array.from({ length: Math.min(lineCount, 24) }, (_, i) => (
-                <div key={i} className="pr-2">{i + 1}</div>
+          <div className="relative min-h-0 flex-1">
+            <div className="absolute bottom-0 left-0 top-0 w-9 border-r border-border bg-black/40 pt-2 text-right font-mono text-[10px] leading-5 text-neutral-600 select-none">
+              {Array.from({ length: Math.min(lineCount, 40) }, (_, i) => (
+                <div key={i} className="pr-1.5">{i + 1}</div>
               ))}
             </div>
             <textarea
@@ -111,7 +110,7 @@ export default function AnalyzePanel({
               onChange={(e) => setLogText(e.target.value)}
               spellCheck={false}
               placeholder="$ kubectl describe pod api-xyz..."
-              className="min-h-[340px] w-full resize-y border border-border bg-black py-3 pl-12 pr-4 font-mono text-[13px] leading-5 text-neutral-200 outline-none focus:border-accent"
+              className="h-full min-h-[120px] w-full resize-none border border-border bg-black py-2 pl-10 pr-3 font-mono text-[12px] leading-5 text-neutral-200 outline-none focus:border-accent"
             />
           </div>
 
@@ -119,13 +118,13 @@ export default function AnalyzePanel({
             type="button"
             onClick={onAnalyze}
             disabled={loading || !logText.trim()}
-            className="mt-3 w-full border border-accent bg-accent/15 py-3 font-mono text-sm font-semibold text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-2 shrink-0 w-full border border-accent bg-accent/15 py-2.5 font-mono text-sm font-semibold text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? "Running diagnosis..." : "▸ Analyze incident"}
           </button>
 
           {error && (
-            <div className="mt-3 border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-xs text-red-300">
+            <div className="mt-2 shrink-0 border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-xs text-red-300">
               {error}
             </div>
           )}
@@ -133,8 +132,8 @@ export default function AnalyzePanel({
       </section>
 
       {/* Output */}
-      <section className="border border-border bg-panel">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <section className="flex min-h-0 flex-col border border-border bg-panel">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <div>
             <h2 className="font-mono text-sm font-semibold">Diagnosis output</h2>
             <p className="text-xs text-muted">Structured root cause, commands, and fix</p>
@@ -161,9 +160,9 @@ export default function AnalyzePanel({
         </div>
 
         {!result && (
-          <div className="flex min-h-[420px] flex-col items-center justify-center px-6 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
             <p className="font-mono text-4xl text-neutral-700">⌬</p>
-            <p className="mt-3 font-mono text-sm text-neutral-400">No diagnosis yet</p>
+            <p className="mt-2 font-mono text-sm text-neutral-400">No diagnosis yet</p>
             <p className="mt-1 max-w-xs text-xs text-muted">
               Paste a log or load a sample, then run analysis
             </p>
@@ -171,7 +170,7 @@ export default function AnalyzePanel({
         )}
 
         {result && (
-          <div className="max-h-[520px] overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             <div className="mb-3 inline-block border border-border bg-void px-2 py-1 font-mono text-[11px] uppercase text-info">
               {result.category}
             </div>

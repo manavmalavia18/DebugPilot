@@ -5,7 +5,7 @@ from prometheus_client import Counter
 from app.ai import analyze_with_claude
 from app.cache import cache_key, get_cached_analysis, set_cached_analysis
 from app.models import AnalysisResult, PlaybookMatch, SourceCategory
-from app.retrieval import find_relevant_playbooks
+from app.retrieval import find_relevant_playbooks, playbooks_for_llm_context
 
 analysis_cache_hits = Counter(
     "debugpilot_analysis_cache_hits_total",
@@ -53,9 +53,10 @@ def analyze_log(log_text: str, source_hint: SourceCategory | None = None) -> tup
         return AnalysisResult(**cached_payload), True
 
     matches = find_relevant_playbooks(log_text)
+    context_matches = playbooks_for_llm_context(matches)
     category = detect_source(log_text, source_hint)
     context_blocks = "\n\n---\n\n".join(
-        f"Known incident: {match.name}\n{match.content}" for match in matches
+        f"Known incident: {match.name}\n{match.content}" for match in context_matches
     )
 
     raw = analyze_with_claude(

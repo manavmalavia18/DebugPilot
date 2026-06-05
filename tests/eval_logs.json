@@ -1,0 +1,38 @@
+[
+  {
+    "id": "redis-k8s",
+    "expect_top": "redis-localhost-k8s",
+    "min_score": 0.65,
+    "log": "Back-off restarting failed container api in pod debugpilot-api-7d8f9c-abc12_default\nLast State: Terminated\nReason: Error\nExit Code: 1\nLogs:\nredis.exceptions.ConnectionError: Error 111 connecting to localhost:6379. Connection refused."
+  },
+  {
+    "id": "redis-sample-log",
+    "expect_top": "redis-localhost-k8s",
+    "min_score": 0.65,
+    "log": "Back-off restarting failed container api in pod debugpilot-api-7d8f9c-abc12_default\nredis.exceptions.ConnectionError: Error 111 connecting to localhost:6379. Connection refused.\nREDIS_URL=redis://localhost:6379/0\nStatus: CrashLoopBackOff"
+  },
+  {
+    "id": "image-pull",
+    "expect_top": "image-pull-backoff",
+    "min_score": 0.5,
+    "log": "Failed to pull image \"565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:badtag\":\nrpc error: code = NotFound desc = failed to pull and unpack image: manifest unknown\nPod status: ImagePullBackOff"
+  },
+  {
+    "id": "ingress-503",
+    "expect_top": "ingress-503",
+    "min_score": 0.5,
+    "log": "curl https://debugpilot.manavmalavia.org/\nHTTP/2 503 Service Unavailable\nnginx ingress: no upstream endpoints available for service debugpilot-api"
+  },
+  {
+    "id": "terraform-lock",
+    "expect_top": "terraform-state-lock",
+    "min_score": 0.5,
+    "log": "Error: Error acquiring the state lock\nLock Info:\n  ID:        a1b2c3d4-5678-90ab-cdef\n  Path:      debugpilot/terraform.tfstate\n  Operation: OperationTypeApply\n  Who:       github-actions@runner\n  Version:   1.7.0"
+  },
+  {
+    "id": "github-actions",
+    "expect_top": "github-actions-kubeconfig",
+    "min_score": 0.5,
+    "log": "##[error]Unable to connect to the server: getting credentials: exec: executable aws not found\nRun aws eks update-kubeconfig --name debugpilot --region us-east-1\nerror: You must be logged in to the server (Unauthorized)"
+  }
+]
