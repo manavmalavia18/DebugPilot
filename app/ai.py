@@ -68,3 +68,47 @@ Log text:
     parsed.setdefault("prevention", [])
     parsed.setdefault("similar_incidents", [])
     return parsed
+
+
+FOLLOWUP_SYSTEM_PROMPT = """You are DebugPilot, a senior DevOps engineer continuing a debugging session.
+
+You already analyzed an infrastructure log and produced an initial diagnosis. The user is asking follow-up questions.
+
+Rules:
+- Answer in plain text (markdown code blocks OK for commands).
+- Stay grounded in the original log and initial diagnosis — do not invent resources not implied by the log.
+- Prefer read-only kubectl/terraform commands; warn before destructive steps.
+- Be concise and practical."""
+
+
+def follow_up_with_claude(
+    log_text: str,
+    diagnosis: dict,
+    history: list[tuple[str, str]],
+    user_message: str,
+) -> str:
+    summary = (
+        f"Category: {diagnosis.get('category')}\n"
+        f"Symptom: {diagnosis.get('symptom')}\n"
+        f"Root cause: {diagnosis.get('root_cause')}\n"
+        f"Likely fix: {diagnosis.get('likely_fix')}\n"
+        f"Confidence: {diagnosis.get('confidence')}"
+    )
+    system = (
+        f"{FOLLOWUP_SYSTEM_PROMPT}\n\n"
+        f"Original log:\n{log_text}\n\n"
+        f"Initial diagnosis:\n{summary}"
+    )
+
+    messages: list[dict[str, str]] = [
+        {"role": role, "content": content} for role, content in history
+    ]
+    messages.append({"role": "user", "content": user_message})
+
+    message = client.messages.create(
+        model=MODEL,
+        max_tokens=900,
+        system=system,
+        messages=messages,
+    )
+    return message.content[0].text.strip()

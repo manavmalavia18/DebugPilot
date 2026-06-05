@@ -18,6 +18,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState(null)
+  const [incidentId, setIncidentId] = useState(null)
   const [history, setHistory] = useState([])
   const [apiOnline, setApiOnline] = useState(false)
   const [authEnabled, setAuthEnabled] = useState(false)
@@ -101,6 +102,7 @@ export default function App() {
     if (!logText.trim() && !uploadId) return
     setLoading(true)
     setError("")
+    setIncidentId(null)
     try {
       const payload = {
         log_text: logText,
@@ -110,6 +112,7 @@ export default function App() {
       if (uploadId) payload.upload_id = uploadId
       const res = await api.post("/analyze", payload)
       setResult(res.data)
+      setIncidentId(res.data.incident_id ?? null)
       setView("analyze")
       loadHistory()
     } catch (err) {
@@ -128,6 +131,7 @@ export default function App() {
     try {
       const res = await api.get(`/incidents/${id}`)
       setResult({ ...res.data, cached: undefined, duration_ms: undefined })
+      setIncidentId(id)
       setView("analyze")
       setError("")
     } catch (err) {
@@ -143,6 +147,7 @@ export default function App() {
     }
     setUser(null)
     setResult(null)
+    setIncidentId(null)
     setHistory([])
   }
 
@@ -249,6 +254,7 @@ export default function App() {
                     uploadFilename={uploadFilename}
                     error={error}
                     result={result}
+                    incidentId={incidentId}
                     onAnalyze={analyze}
                     onLoadPreset={loadPreset}
                     onUploadFile={uploadLogFile}
