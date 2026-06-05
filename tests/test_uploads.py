@@ -53,7 +53,7 @@ def test_analyze_with_upload_id(client, monkeypatch):
     )
     upload_id = upload.json()["id"]
 
-    def fake_analyze(log_text, source_hint=None):
+    def fake_analyze(log_text, source_hint=None, **kwargs):
         return (
             AnalysisResult(
                 category="github_actions",
