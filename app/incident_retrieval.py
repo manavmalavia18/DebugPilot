@@ -146,9 +146,9 @@ def find_similar_saved_incidents(
 
     if semantic_rag_enabled():
         try:
-            matches = _semantic_incident_matches(log_text, rows, limit)
-            if matches:
-                return matches
+            semantic_matches = _semantic_incident_matches(log_text, rows, limit)
+            if incidents_for_llm_context(semantic_matches):
+                return semantic_matches
         except Exception:
             pass
 
