@@ -1,11 +1,12 @@
 import pytest
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.incident_retrieval import (
     find_similar_saved_incidents,
     format_incident_history_context,
     incidents_for_llm_context,
+    incidents_for_ui_display,
 )
 from app.models import SavedIncident, User
 
@@ -126,6 +127,45 @@ def test_find_similar_saved_incidents_weak_semantic_falls_back_to_keyword(sessio
     assert matches
     assert matches[0].method == "keyword"
     assert matches[0].incident_id == 1
+
+
+def test_keyword_match_uses_symptom_and_fix_fields(session, monkeypatch):
+    monkeypatch.setenv("SEMANTIC_RAG_DISABLED", "1")
+    db, user_id = session
+    # Short log with few tokens — still matches via saved symptom/root_cause overlap.
+    log = "redis connection refused localhost:6379"
+    matches = find_similar_saved_incidents(db, user_id, log, limit=1)
+    assert matches
+    assert matches[0].incident_id == 1
+
+
+def test_thumbs_down_incidents_excluded(session, monkeypatch):
+    monkeypatch.setenv("SEMANTIC_RAG_DISABLED", "1")
+    db, user_id = session
+    row = db.exec(select(SavedIncident).where(SavedIncident.id == 1)).first()
+    row.feedback = -1
+    db.add(row)
+    db.commit()
+
+    log = "CrashLoopBackOff connection refused localhost:6379 redis cache unreachable"
+    matches = find_similar_saved_incidents(db, user_id, log, limit=2)
+    assert len(matches) == 0
+
+
+def test_incidents_for_ui_display_falls_back_to_keyword():
+    from app.incident_retrieval import IncidentHistoryMatch
+
+    weak_semantic = [
+        IncidentHistoryMatch(1, "a", 0.5, "semantic", "Redis crash"),
+    ]
+    assert incidents_for_llm_context(weak_semantic) == []
+
+    keyword = [
+        IncidentHistoryMatch(2, "b", 1.0, "keyword", "Redis crash"),
+    ]
+    display = incidents_for_ui_display(keyword)
+    assert len(display) == 1
+    assert display[0].incident_id == 2
 
 
 def test_format_incident_history_context_includes_past_fix():
