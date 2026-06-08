@@ -223,6 +223,22 @@ resource "null_resource" "ingress_rules" {
   ]
 }
 
+resource "null_resource" "api_service_account" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      kubectl apply -f - <<YAML
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: debugpilot-api
+        namespace: default
+      YAML
+    EOT
+  }
+
+  depends_on = [null_resource.kubeconfig]
+}
+
 resource "null_resource" "debugpilot_secrets" {
   count = var.anthropic_api_key != "" ? 1 : 0
 
