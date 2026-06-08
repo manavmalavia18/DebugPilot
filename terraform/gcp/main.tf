@@ -3,6 +3,7 @@ terraform {
     google = { source = "hashicorp/google", version = "~> 5.0" }
     helm   = { source = "hashicorp/helm", version = "~> 2.0" }
     null   = { source = "hashicorp/null", version = "~> 3.0" }
+    random = { source = "hashicorp/random", version = "~> 3.0" }
   }
 }
 
@@ -28,6 +29,8 @@ module "gke" {
   source         = "./modules/gke"
   project_name   = var.project_name
   gcp_region     = var.gcp_region
+  gcp_zone       = var.gcp_zone
+  node_locations = var.node_locations
   network        = module.network.network
   subnetwork     = module.network.subnetwork
   machine_type   = var.machine_type
@@ -39,7 +42,7 @@ module "gke" {
 
 resource "null_resource" "kubeconfig" {
   provisioner "local-exec" {
-    command = "gcloud container clusters get-credentials ${var.project_name} --region=${var.gcp_region} --project=${var.gcp_project_id}"
+    command = var.gcp_zone != "" ? "gcloud container clusters get-credentials ${var.project_name} --zone=${var.gcp_zone} --project=${var.gcp_project_id}" : "gcloud container clusters get-credentials ${var.project_name} --region=${var.gcp_region} --project=${var.gcp_project_id}"
   }
 
   depends_on = [module.gke]
@@ -244,10 +247,11 @@ resource "null_resource" "debugpilot_secrets" {
 
   provisioner "local-exec" {
     environment = {
-      ANTHROPIC_API_KEY      = var.anthropic_api_key
-      GITHUB_CLIENT_ID       = var.github_client_id
-      GITHUB_CLIENT_SECRET   = var.github_client_secret
-      JWT_SECRET             = var.jwt_secret
+      ANTHROPIC_API_KEY    = var.anthropic_api_key
+      GITHUB_CLIENT_ID     = var.github_client_id
+      GITHUB_CLIENT_SECRET = var.github_client_secret
+      JWT_SECRET           = var.jwt_secret
+      DATABASE_URL         = local.database_url
     }
     command = <<-EOT
       EXTRA_ARGS=""
@@ -260,6 +264,9 @@ resource "null_resource" "debugpilot_secrets" {
       if [ -n "$JWT_SECRET" ]; then
         EXTRA_ARGS="$EXTRA_ARGS --from-literal=JWT_SECRET=$JWT_SECRET"
       fi
+      if [ -n "$DATABASE_URL" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=DATABASE_URL=$DATABASE_URL"
+      fi
       kubectl create secret generic debugpilot-secrets \
         --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
         $EXTRA_ARGS \
@@ -267,11 +274,15 @@ resource "null_resource" "debugpilot_secrets" {
     EOT
   }
 
-  depends_on = [null_resource.kubeconfig]
+  depends_on = [
+    null_resource.kubeconfig,
+    google_sql_database_instance.postgres,
+  ]
 
   triggers = {
     api_key_hash = sha256(var.anthropic_api_key)
     auth_hash    = sha256("${var.github_client_id}:${var.jwt_secret}")
+    db_hash      = sha256(local.database_url)
   }
 }
 

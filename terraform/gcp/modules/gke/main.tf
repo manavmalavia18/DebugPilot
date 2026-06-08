@@ -1,8 +1,13 @@
+locals {
+  cluster_location = var.gcp_zone != "" ? var.gcp_zone : var.gcp_region
+}
+
 resource "google_container_cluster" "main" {
   name                     = var.project_name
-  location                 = var.gcp_region
+  location                 = local.cluster_location
   network                  = var.network
   subnetwork               = var.subnetwork
+  node_locations           = var.gcp_zone == "" && length(var.node_locations) > 0 ? var.node_locations : null
   initial_node_count       = 1
   remove_default_node_pool = true
 
@@ -11,14 +16,15 @@ resource "google_container_cluster" "main" {
     update = "60m"
     delete = "60m"
   }
-  deletion_protection      = false
+  deletion_protection = false
 }
 
 resource "google_container_node_pool" "workers" {
-  name       = "workers"
-  location   = var.gcp_region
-  cluster    = google_container_cluster.main.name
-  node_count = var.node_count
+  name           = "workers"
+  location       = local.cluster_location
+  cluster        = google_container_cluster.main.name
+  node_locations = var.gcp_zone == "" && length(var.node_locations) > 0 ? var.node_locations : null
+  node_count     = var.node_count
 
   timeouts {
     create = "30m"

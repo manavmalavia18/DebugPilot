@@ -46,12 +46,16 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name       = aws_db_subnet_group.postgres.name
   vpc_security_group_ids     = [aws_security_group.postgres.id]
   publicly_accessible        = false
-  skip_final_snapshot        = true
+  skip_final_snapshot        = var.db_skip_final_snapshot
   backup_retention_period    = 1
-  deletion_protection        = false
+  deletion_protection        = var.db_deletion_protection
   auto_minor_version_upgrade = true
 
   tags = { Name = "${var.project_name}-postgres", Project = var.project_name }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 locals {
