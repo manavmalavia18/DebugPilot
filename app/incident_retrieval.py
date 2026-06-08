@@ -62,6 +62,13 @@ def _token_set(text: str) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9][a-z0-9._/-]{2,}", text.lower())}
 
 
+def _incident_search_corpus(row: SavedIncident) -> str:
+    parts = [row.log_text, row.symptom, row.root_cause, row.likely_fix]
+    if row.resolution:
+        parts.append(row.resolution)
+    return "\n".join(part for part in parts if part)
+
+
 def _keyword_incident_matches(
     log_text: str,
     rows: list[SavedIncident],
@@ -73,7 +80,7 @@ def _keyword_incident_matches(
 
     scored: list[tuple[int, SavedIncident]] = []
     for row in rows:
-        overlap = len(haystack & _token_set(row.log_text))
+        overlap = len(haystack & _token_set(_incident_search_corpus(row)))
         if overlap >= MIN_KEYWORD_OVERLAP:
             scored.append((overlap, row))
 
@@ -152,6 +159,14 @@ def incidents_for_llm_context(matches: list[IncidentHistoryMatch]) -> list[Incid
     return []
 
 
+def incidents_for_ui_display(matches: list[IncidentHistoryMatch]) -> list[IncidentHistoryMatch]:
+    """Chips shown in the UI — prefer injected context, else best similar match."""
+    context = incidents_for_llm_context(matches)
+    if context:
+        return context
+    return dedupe_incident_history_matches(matches)
+
+
 def find_similar_saved_incidents(
     session: Session,
     user_id: int,
@@ -171,6 +186,8 @@ def find_similar_saved_incidents(
     if not rows:
         return []
 
+    keyword_matches = _keyword_incident_matches(log_text, rows, limit)
+
     if semantic_rag_enabled():
         try:
             semantic_matches = _semantic_incident_matches(log_text, rows, limit)
@@ -179,7 +196,7 @@ def find_similar_saved_incidents(
         except Exception:
             pass
 
-    return _keyword_incident_matches(log_text, rows, limit)
+    return keyword_matches
 
 
 def format_incident_history_context(matches: list[IncidentHistoryMatch]) -> str:

@@ -16,7 +16,7 @@ from app.analyzer import analyze_log
 from app.incident_retrieval import (
     find_similar_saved_incidents,
     format_incident_history_context,
-    incidents_for_llm_context,
+    incidents_for_ui_display,
 )
 from app.auth import (
     OAUTH_STATE_COOKIE,
@@ -279,7 +279,7 @@ def analyze(
         raise HTTPException(status_code=400, detail="log_text or upload_id is required")
 
     history_matches = find_similar_saved_incidents(session, user.id, log_text)
-    context_matches = incidents_for_llm_context(history_matches)
+    display_matches = incidents_for_ui_display(history_matches)
     history_context = format_incident_history_context(history_matches)
 
     try:
@@ -327,7 +327,7 @@ def analyze(
                 method=match.method,
                 symptom=match.symptom,
             )
-            for match in context_matches
+            for match in display_matches
         ],
     )
 
