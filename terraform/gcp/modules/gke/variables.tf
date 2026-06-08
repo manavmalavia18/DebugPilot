@@ -6,6 +6,16 @@ variable "gcp_region" {
   type = string
 }
 
+variable "gcp_zone" {
+  type    = string
+  default = ""
+}
+
+variable "node_locations" {
+  type    = list(string)
+  default = []
+}
+
 variable "network" {
   type = string
 }

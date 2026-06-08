@@ -1,7 +1,7 @@
 resource "aws_iam_role" "cluster" {
   name = "${var.project_name}-eks-cluster-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "eks.amazonaws.com" } }]
   })
 }
@@ -17,13 +17,13 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.cluster.arn
   vpc_config { subnet_ids = var.subnet_ids }
   depends_on = [aws_iam_role_policy_attachment.cluster_policy]
-  tags = { Name = var.project_name, Project = var.project_name }
+  tags       = { Name = var.project_name, Project = var.project_name }
 }
 
 resource "aws_iam_role" "node_group" {
   name = "${var.project_name}-eks-node-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" } }]
   })
 }
@@ -50,7 +50,7 @@ resource "aws_eks_node_group" "workers" {
     max_size     = var.node_count_max
   }
   depends_on = [aws_iam_role_policy_attachment.node_policy]
-  tags = { Name = "${var.project_name}-workers", Project = var.project_name }
+  tags       = { Name = "${var.project_name}-workers", Project = var.project_name }
 }
 
 resource "aws_iam_role_policy" "node_uploads" {
@@ -61,8 +61,8 @@ resource "aws_iam_role_policy" "node_uploads" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+      Effect   = "Allow"
+      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
       Resource = "${var.uploads_bucket_arn}/*"
     }]
   })

@@ -51,3 +51,19 @@ kubectl get ingress -A
 ```
 
 Push an image to Artifact Registry before expecting the API pod to run (CI on `main` or `scripts/up.sh` option 2).
+
+## Cloud SQL (incident history)
+
+GCP now provisions **Cloud SQL Postgres** (private IP) and sets `DATABASE_URL` in `debugpilot-secrets`, matching AWS RDS.
+
+Enable APIs on first apply:
+
+```bash
+gcloud services enable sqladmin.googleapis.com servicenetworking.googleapis.com
+```
+
+## Cost controls
+
+See [docs/cost-controls.md](../../docs/cost-controls.md) — pause DB, destroy cluster, resume later.
+
+If GKE fails with `GCE_STOCKOUT` in `us-central1-c`, use `node_locations` in `terraform.tfvars` (see `terraform.tfvars.example`).

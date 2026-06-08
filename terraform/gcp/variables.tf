@@ -12,9 +12,33 @@ variable "project_name" {
   default = "debugpilot"
 }
 
+variable "gcp_zone" {
+  type        = string
+  default     = ""
+  description = "Optional zonal cluster location (e.g. us-central1-a) to avoid regional stockouts."
+}
+
+variable "node_locations" {
+  type        = list(string)
+  default     = ["us-central1-a", "us-central1-b"]
+  description = "Zones for regional GKE nodes; omit -c if it is out of capacity."
+}
+
 variable "machine_type" {
   type    = string
-  default = "e2-medium"
+  default = "e2-small"
+}
+
+variable "db_tier" {
+  type        = string
+  default     = "db-g1-small"
+  description = "Cloud SQL tier; db-g1-small is the smallest shared-core Postgres tier."
+}
+
+variable "db_deletion_protection" {
+  type        = bool
+  default     = true
+  description = "GCP API guard against accidental Cloud SQL delete. Use scripts/pause-db.sh to stop compute billing."
 }
 
 variable "node_count" {

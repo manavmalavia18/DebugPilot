@@ -25,3 +25,12 @@ output "grafana_url" {
 output "argocd_url" {
   value = "https://${var.hostname_prefix}-argocd.${var.domain_name}"
 }
+
+output "database_host" {
+  value = google_sql_database_instance.postgres.private_ip_address
+}
+
+output "database_url" {
+  value     = local.database_url
+  sensitive = true
+}

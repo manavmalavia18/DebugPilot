@@ -100,6 +100,18 @@ variable "db_instance_class" {
   default = "db.t4g.micro"
 }
 
+variable "db_deletion_protection" {
+  type        = bool
+  default     = true
+  description = "AWS API guard against accidental RDS delete. Use scripts/pause-db.sh to stop billing compute instead."
+}
+
+variable "db_skip_final_snapshot" {
+  type        = bool
+  default     = false
+  description = "If true, terraform destroy can drop RDS without snapshot (only when prevent_destroy is removed)."
+}
+
 variable "argocd_github_webhook_secret" {
   type        = string
   sensitive   = true
