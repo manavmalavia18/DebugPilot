@@ -18,11 +18,11 @@ resource "google_compute_global_address" "sql_private_range" {
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
   prefix_length = 16
-  network       = module.network.network
+  network       = module.network.network_id
 }
 
 resource "google_service_networking_connection" "sql_private_vpc" {
-  network                 = module.network.network
+  network                 = module.network.network_id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.sql_private_range.name]
 
@@ -42,7 +42,7 @@ resource "google_sql_database_instance" "postgres" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = module.network.network
+      private_network = module.network.network_id
     }
 
     backup_configuration {
