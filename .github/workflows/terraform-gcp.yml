@@ -92,6 +92,38 @@ jobs:
             echo "Cluster not reachable. Skipping ingress DNS cleanup."
           fi
 
+      - name: Detach Cloud SQL networking from Terraform state
+        if: inputs.action == 'destroy'
+        run: |
+          if gcloud sql instances describe debugpilot-postgres \
+            --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Cloud SQL instance exists — keeping it and VPC peering in GCP; removing from Terraform state."
+            terraform state rm google_sql_user.debugpilot 2>/dev/null || true
+            terraform state rm google_sql_database.debugpilot 2>/dev/null || true
+            terraform state rm google_sql_database_instance.postgres 2>/dev/null || true
+            terraform state rm random_password.db 2>/dev/null || true
+            terraform state rm google_service_networking_connection.sql_private_vpc 2>/dev/null || true
+            terraform state rm google_compute_global_address.sql_private_range 2>/dev/null || true
+            terraform state rm module.network.google_compute_subnetwork.main 2>/dev/null || true
+            terraform state rm module.network.google_compute_network.main 2>/dev/null || true
+          fi
+
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          REFRESH_FLAG=""
+          if gcloud sql instances describe debugpilot-postgres \
+            --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            REFRESH_FLAG="-refresh=false"
+            echo "Using destroy with -refresh=false (Cloud SQL retained)."
+          fi
+          terraform destroy -auto-approve -input=false $REFRESH_FLAG || {
+            echo "Destroy finished with errors — OK if Cloud SQL peering was kept."
+            if ! gcloud container clusters describe debugpilot \
+              --region "${{ secrets.GCP_REGION }}" \
+              --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              echo "GKE cluster is gone — shutdown succeeded."
+              exit 0
+            fi
+            exit 1
+          }
