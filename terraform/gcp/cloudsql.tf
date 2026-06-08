@@ -3,15 +3,8 @@ resource "random_password" "db" {
   special = false
 }
 
-resource "google_project_service" "sqladmin" {
-  service            = "sqladmin.googleapis.com"
-  disable_on_destroy = false
-}
-
-resource "google_project_service" "servicenetworking" {
-  service            = "servicenetworking.googleapis.com"
-  disable_on_destroy = false
-}
+# APIs must be enabled once by a project owner (CI SA cannot enable services):
+#   gcloud services enable sqladmin.googleapis.com servicenetworking.googleapis.com
 
 resource "google_compute_global_address" "sql_private_range" {
   name          = "${var.project_name}-sql-private-ip"
@@ -26,7 +19,6 @@ resource "google_service_networking_connection" "sql_private_vpc" {
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.sql_private_range.name]
 
-  depends_on = [google_project_service.servicenetworking]
 }
 
 resource "google_sql_database_instance" "postgres" {
@@ -52,10 +44,7 @@ resource "google_sql_database_instance" "postgres" {
 
   deletion_protection = var.db_deletion_protection
 
-  depends_on = [
-    google_project_service.sqladmin,
-    google_service_networking_connection.sql_private_vpc,
-  ]
+  depends_on = [google_service_networking_connection.sql_private_vpc]
 
   lifecycle {
     prevent_destroy = true
