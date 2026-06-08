@@ -56,11 +56,13 @@ Push an image to Artifact Registry before expecting the API pod to run (CI on `m
 
 GCP now provisions **Cloud SQL Postgres** (private IP) and sets `DATABASE_URL` in `debugpilot-secrets`, matching AWS RDS.
 
-Enable APIs on first apply:
+**One-time (project owner / Console):** enable Cloud SQL APIs before the first cluster apply. The GitHub Actions service account cannot enable project services.
 
 ```bash
 gcloud services enable sqladmin.googleapis.com servicenetworking.googleapis.com
 ```
+
+Or: GCP Console → **APIs & Services** → **Library** → enable **Cloud SQL Admin API** and **Service Networking API**.
 
 ## Cost controls
 
