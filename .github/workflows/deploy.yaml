@@ -52,23 +52,36 @@ jobs:
             echo "Missing ANTHROPIC_API_KEY GitHub secret — required for DebugPilot analyze endpoint."
             exit 1
           fi
-          kubectl create secret generic debugpilot-secrets \
-            --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          if kubectl get secret debugpilot-secrets >/dev/null 2>&1; then
+            kubectl patch secret debugpilot-secrets --type merge \
+              -p "{\"stringData\":{\"ANTHROPIC_API_KEY\":\"$ANTHROPIC_API_KEY\"}}"
+          else
+            kubectl create secret generic debugpilot-secrets \
+              --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+          fi
 
       - name: Resolve image tag
         id: resolve_tag_aws
         run: |
-          if [ -z "${{ inputs.image_tag }}" ]; then
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            IMAGE_TAG="${{ inputs.image_tag }}"
+            echo "Using provided tag: $IMAGE_TAG"
+          else
             IMAGE_TAG=$(aws ecr describe-images \
               --repository-name debugpilot-api \
               --region ${{ secrets.AWS_REGION }} \
-              --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[1]' \
-              --output text)
-            echo "Using latest ECR tag: $IMAGE_TAG"
-          else
-            IMAGE_TAG="${{ inputs.image_tag }}"
-            echo "Using provided tag: $IMAGE_TAG"
+              --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' \
+              --output text 2>/dev/null || true)
+            if [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "None" ]; then
+              IMAGE_TAG=$(grep -m1 'image:' charts/debugpilot/values.yaml | sed 's/.*debugpilot-api://')
+              echo "Using tag from values.yaml: $IMAGE_TAG"
+            else
+              echo "Using latest ECR tag: $IMAGE_TAG"
+            fi
+          fi
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "Could not resolve image tag — pass image_tag input or ensure ECR/values.yaml has a tag."
+            exit 1
           fi
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
@@ -130,23 +143,27 @@ jobs:
             echo "Missing ANTHROPIC_API_KEY GitHub secret — required for DebugPilot analyze endpoint."
             exit 1
           fi
-          kubectl create secret generic debugpilot-secrets \
-            --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          if kubectl get secret debugpilot-secrets >/dev/null 2>&1; then
+            kubectl patch secret debugpilot-secrets --type merge \
+              -p "{\"stringData\":{\"ANTHROPIC_API_KEY\":\"$ANTHROPIC_API_KEY\"}}"
+          else
+            kubectl create secret generic debugpilot-secrets \
+              --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+          fi
 
       - name: Resolve image tag
         id: resolve_tag_gcp
         run: |
-          if [ -z "${{ inputs.image_tag }}" ]; then
-            IMAGE_TAG=$(gcloud artifacts docker images list \
-              us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/debugpilot/debugpilot-api \
-              --sort-by=~UPDATE_TIME \
-              --limit=1 \
-              --format='value(tags)' | head -1)
-            echo "Using latest GAR tag: $IMAGE_TAG"
-          else
+          if [ -n "${{ inputs.image_tag }}" ]; then
             IMAGE_TAG="${{ inputs.image_tag }}"
             echo "Using provided tag: $IMAGE_TAG"
+          else
+            IMAGE_TAG=$(grep -m1 'image:' charts/debugpilot/values-gcp.yaml | sed 's/.*debugpilot-api://')
+            echo "Using tag from values-gcp.yaml: $IMAGE_TAG"
+          fi
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "Could not resolve image tag — pass image_tag input or ensure values-gcp.yaml has a tag."
+            exit 1
           fi
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
