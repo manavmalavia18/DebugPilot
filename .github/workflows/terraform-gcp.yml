@@ -54,11 +54,71 @@ jobs:
             echo "GKE cluster does not exist yet. Skipping kubeconfig update."
           fi
 
+      - name: Start Cloud SQL before apply
+        if: inputs.action == 'apply'
+        run: |
+          INSTANCE=debugpilot-postgres
+          PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          if ! gcloud sql instances describe "$INSTANCE" --project="$PROJECT" >/dev/null 2>&1; then
+            echo "No existing Cloud SQL — apply will create one."
+            exit 0
+          fi
+          STATE=$(gcloud sql instances describe "$INSTANCE" --project="$PROJECT" --format='value(state)')
+          if [ "$STATE" = "RUNNABLE" ]; then
+            echo "Cloud SQL already RUNNABLE."
+            exit 0
+          fi
+          echo "Starting Cloud SQL (was $STATE)..."
+          gcloud sql instances patch "$INSTANCE" \
+            --project="$PROJECT" \
+            --activation-policy=ALWAYS \
+            --quiet
+          for i in $(seq 1 36); do
+            STATE=$(gcloud sql instances describe "$INSTANCE" --project="$PROJECT" --format='value(state)')
+            echo "  state=$STATE"
+            if [ "$STATE" = "RUNNABLE" ]; then
+              echo "Cloud SQL is RUNNABLE."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for Cloud SQL to become RUNNABLE."
+          exit 1
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: terraform init
+
+      - name: Import existing Cloud SQL and network
+        if: inputs.action == 'apply'
+        run: |
+          PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          REGION="${{ secrets.GCP_REGION }}"
+          INSTANCE=debugpilot-postgres
+
+          import_if_missing() {
+            if ! terraform state show "$1" >/dev/null 2>&1; then
+              echo "Importing $1"
+              terraform import "$1" "$2" || true
+            fi
+          }
+
+          if gcloud sql instances describe "$INSTANCE" --project="$PROJECT" >/dev/null 2>&1; then
+            import_if_missing google_sql_database_instance.postgres "$PROJECT/$INSTANCE"
+            import_if_missing google_sql_database.debugpilot "$PROJECT/$INSTANCE/debugpilot"
+            import_if_missing google_sql_user.debugpilot "debugpilot//${INSTANCE}"
+          fi
+          if gcloud compute networks describe debugpilot-vpc --project="$PROJECT" >/dev/null 2>&1; then
+            import_if_missing module.network.google_compute_network.main "projects/$PROJECT/global/networks/debugpilot-vpc"
+            import_if_missing module.network.google_compute_subnetwork.main "projects/$PROJECT/regions/$REGION/subnetworks/debugpilot-subnet"
+          fi
+          if gcloud compute addresses describe debugpilot-sql-private-ip --global --project="$PROJECT" >/dev/null 2>&1; then
+            import_if_missing google_compute_global_address.sql_private_range "projects/$PROJECT/global/addresses/debugpilot-sql-private-ip"
+          fi
+          import_if_missing google_service_networking_connection.sql_private_vpc \
+            "projects/$PROJECT/global/networks/debugpilot-vpc:servicenetworking.googleapis.com"
 
       - name: Terraform Plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
@@ -127,3 +187,33 @@ jobs:
             fi
             exit 1
           }
+
+      - name: Stop Cloud SQL after destroy
+        if: inputs.action == 'destroy'
+        run: |
+          INSTANCE=debugpilot-postgres
+          PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          if ! gcloud sql instances describe "$INSTANCE" --project="$PROJECT" >/dev/null 2>&1; then
+            echo "No Cloud SQL instance to stop."
+            exit 0
+          fi
+          STATE=$(gcloud sql instances describe "$INSTANCE" --project="$PROJECT" --format='value(state)')
+          if [ "$STATE" = "STOPPED" ]; then
+            echo "Cloud SQL already STOPPED."
+            exit 0
+          fi
+          echo "Stopping Cloud SQL to save cost..."
+          gcloud sql instances patch "$INSTANCE" \
+            --project="$PROJECT" \
+            --activation-policy=NEVER \
+            --quiet
+          for i in $(seq 1 30); do
+            STATE=$(gcloud sql instances describe "$INSTANCE" --project="$PROJECT" --format='value(state)')
+            echo "  state=$STATE"
+            if [ "$STATE" = "STOPPED" ]; then
+              echo "Cloud SQL stopped. Idle cost ~\$2/mo storage."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Stop requested — instance may still be stopping."

@@ -66,6 +66,10 @@ Or: GCP Console → **APIs & Services** → **Library** → enable **Cloud SQL A
 
 ## Cost controls
 
-See [docs/cost-controls.md](../../docs/cost-controls.md) — pause DB, destroy cluster, resume later.
+See [docs/cost-controls.md](../../docs/cost-controls.md).
+
+**One-step shutdown:** GitHub Actions → **Terraform GCP Cluster** → `destroy` — tears down GKE, then stops Cloud SQL (history kept, ~$2/mo).
+
+**One-step bring-back:** same workflow → `apply` — starts Cloud SQL, recreates cluster, wires `DATABASE_URL`.
 
 If GKE fails with `GCE_STOCKOUT` in `us-central1-c`, use `node_locations` in `terraform.tfvars` (see `terraform.tfvars.example`).
