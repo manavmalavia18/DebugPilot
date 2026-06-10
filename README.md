@@ -315,11 +315,15 @@ dig debugpilot-gcp.manavmalavia.org +short
 
 ### Destroy-time DNS cleanup (AWS / GCP)
 
-**Terraform AWS Cluster → destroy** and **Terraform GCP Cluster → destroy** run a pre-step:
+**Terraform AWS Cluster → destroy** and **Terraform GCP Cluster → destroy** run:
 
 1. `kubectl delete -f k8s/ingress/{aws|gcp}/...` (app, Grafana, Argo CD ingresses)
 2. Wait ~90s for external-dns to **delete** Cloudflare records
-3. `terraform destroy`
+3. Detach the managed database (and VPC peering on GCP) from Terraform state — **data is kept**
+4. `terraform destroy` (cluster, Helm, IAM, etc.)
+5. **Stop** RDS / Cloud SQL to cut compute billing (~\$2/mo storage remains)
+
+On **apply**, CI starts a stopped database and re-imports retained resources before recreating the cluster.
 
 This prevents **stale CNAMEs** pointing at deleted load balancers after cluster teardown.
 

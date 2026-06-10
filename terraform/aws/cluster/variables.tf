@@ -103,7 +103,7 @@ variable "db_instance_class" {
 variable "db_deletion_protection" {
   type        = bool
   default     = true
-  description = "AWS API guard against accidental RDS delete. Use scripts/pause-db.sh to stop billing compute instead."
+  description = "AWS API guard against accidental RDS delete. CI destroy workflow stops RDS after cluster teardown."
 }
 
 variable "db_skip_final_snapshot" {

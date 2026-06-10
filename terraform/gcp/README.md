@@ -64,8 +64,8 @@ gcloud services enable sqladmin.googleapis.com servicenetworking.googleapis.com
 
 Or: GCP Console → **APIs & Services** → **Library** → enable **Cloud SQL Admin API** and **Service Networking API**.
 
-## Cost controls
+## Shut down / bring back
 
-See [docs/cost-controls.md](../../docs/cost-controls.md) — pause DB, destroy cluster, resume later.
+Use **Terraform GCP Cluster** in GitHub Actions: **destroy** tears down GKE and stops Cloud SQL (data kept); **apply** starts Cloud SQL if stopped and recreates the cluster.
 
 If GKE fails with `GCE_STOCKOUT` in `us-central1-c`, use `node_locations` in `terraform.tfvars` (see `terraform.tfvars.example`).
