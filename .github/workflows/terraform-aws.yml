@@ -52,8 +52,118 @@ jobs:
             echo "EKS cluster does not exist yet. Skipping kubeconfig update."
           fi
 
+      - name: Start RDS before apply
+        if: inputs.action == 'apply'
+        run: |
+          DB_ID=debugpilot-postgres
+          REGION="${{ secrets.AWS_REGION }}"
+          if ! aws rds describe-db-instances \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" >/dev/null 2>&1; then
+            echo "No existing RDS — apply will create one."
+            exit 0
+          fi
+          STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)
+          if [ "$STATUS" = "available" ]; then
+            echo "RDS already available."
+            exit 0
+          fi
+          echo "Starting RDS (was $STATUS)..."
+          aws rds start-db-instance \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" \
+            --output text >/dev/null
+          aws rds wait db-instance-available \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION"
+          echo "RDS is available."
+
       - name: Terraform Init
         run: terraform init
+
+      - name: Import existing RDS and VPC
+        if: inputs.action == 'apply'
+        run: |
+          DB_ID=debugpilot-postgres
+          REGION="${{ secrets.AWS_REGION }}"
+
+          import_if_missing() {
+            if ! terraform state show "$1" >/dev/null 2>&1; then
+              echo "Importing $1"
+              terraform import "$1" "$2" || true
+            fi
+          }
+
+          if aws rds describe-db-instances \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" >/dev/null 2>&1; then
+            import_if_missing aws_db_instance.postgres "$DB_ID"
+            import_if_missing aws_db_subnet_group.postgres "$DB_ID"
+            SG_ID=$(aws ec2 describe-security-groups \
+              --region "$REGION" \
+              --filters "Name=group-name,Values=debugpilot-postgres" \
+              --query 'SecurityGroups[0].GroupId' \
+              --output text)
+            if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+              import_if_missing aws_security_group.postgres "$SG_ID"
+            fi
+          fi
+
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --region "$REGION" \
+            --filters "Name=tag:Name,Values=debugpilot-vpc" \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            import_if_missing module.vpc.aws_vpc.main "$VPC_ID"
+            for i in 0 1; do
+              SUBNET_ID=$(aws ec2 describe-subnets \
+                --region "$REGION" \
+                --filters "Name=tag:Name,Values=debugpilot-public-$i" \
+                --query 'Subnets[0].SubnetId' \
+                --output text)
+              if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ]; then
+                import_if_missing "module.vpc.aws_subnet.public[$i]" "$SUBNET_ID"
+              fi
+            done
+            IGW_ID=$(aws ec2 describe-internet-gateways \
+              --region "$REGION" \
+              --filters "Name=tag:Name,Values=debugpilot-igw" \
+              --query 'InternetGateways[0].InternetGatewayId' \
+              --output text)
+            if [ -n "$IGW_ID" ] && [ "$IGW_ID" != "None" ]; then
+              import_if_missing module.vpc.aws_internet_gateway.main "$IGW_ID"
+            fi
+            RTB_ID=$(aws ec2 describe-route-tables \
+              --region "$REGION" \
+              --filters "Name=tag:Name,Values=debugpilot-public-rt" \
+              --query 'RouteTables[0].RouteTableId' \
+              --output text)
+            if [ -n "$RTB_ID" ] && [ "$RTB_ID" != "None" ]; then
+              import_if_missing module.vpc.aws_route_table.public "$RTB_ID"
+              for i in 0 1; do
+                SUBNET_ID=$(aws ec2 describe-subnets \
+                  --region "$REGION" \
+                  --filters "Name=tag:Name,Values=debugpilot-public-$i" \
+                  --query 'Subnets[0].SubnetId' \
+                  --output text)
+                if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ]; then
+                  ASSOC_ID=$(aws ec2 describe-route-tables \
+                    --region "$REGION" \
+                    --route-table-ids "$RTB_ID" \
+                    --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" \
+                    --output text)
+                  if [ -n "$ASSOC_ID" ] && [ "$ASSOC_ID" != "None" ]; then
+                    import_if_missing "module.vpc.aws_route_table_association.public[$i]" "$ASSOC_ID"
+                  fi
+                fi
+              done
+            fi
+          fi
 
       - name: Import existing OIDC provider if present
         if: inputs.action == 'plan' || inputs.action == 'apply'
@@ -100,6 +210,83 @@ jobs:
             echo "Cluster not reachable. Skipping ingress DNS cleanup."
           fi
 
+      - name: Detach RDS and VPC from Terraform state
+        if: inputs.action == 'destroy'
+        run: |
+          if aws rds describe-db-instances \
+            --db-instance-identifier debugpilot-postgres \
+            --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; then
+            echo "RDS instance exists — keeping it and VPC in AWS; removing from Terraform state."
+            terraform state rm aws_db_instance.postgres 2>/dev/null || true
+            terraform state rm aws_db_subnet_group.postgres 2>/dev/null || true
+            terraform state rm aws_security_group.postgres 2>/dev/null || true
+            terraform state rm random_password.db 2>/dev/null || true
+            terraform state rm module.vpc.aws_route_table_association.public[0] 2>/dev/null || true
+            terraform state rm module.vpc.aws_route_table_association.public[1] 2>/dev/null || true
+            terraform state rm module.vpc.aws_route_table.public 2>/dev/null || true
+            terraform state rm module.vpc.aws_internet_gateway.main 2>/dev/null || true
+            terraform state rm module.vpc.aws_subnet.public[0] 2>/dev/null || true
+            terraform state rm module.vpc.aws_subnet.public[1] 2>/dev/null || true
+            terraform state rm module.vpc.aws_vpc.main 2>/dev/null || true
+          fi
+
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          REFRESH_FLAG=""
+          if aws rds describe-db-instances \
+            --db-instance-identifier debugpilot-postgres \
+            --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; then
+            REFRESH_FLAG="-refresh=false"
+            echo "Using destroy with -refresh=false (RDS retained)."
+          fi
+          terraform destroy -auto-approve -input=false $REFRESH_FLAG || {
+            echo "Destroy finished with errors — OK if RDS/VPC were kept."
+            if ! aws eks describe-cluster \
+              --region "${{ secrets.AWS_REGION }}" \
+              --name debugpilot >/dev/null 2>&1; then
+              echo "EKS cluster is gone — shutdown succeeded."
+              exit 0
+            fi
+            exit 1
+          }
+
+      - name: Stop RDS after destroy
+        if: inputs.action == 'destroy'
+        run: |
+          DB_ID=debugpilot-postgres
+          REGION="${{ secrets.AWS_REGION }}"
+          if ! aws rds describe-db-instances \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" >/dev/null 2>&1; then
+            echo "No RDS instance to stop."
+            exit 0
+          fi
+          STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)
+          if [ "$STATUS" = "stopped" ]; then
+            echo "RDS already stopped."
+            exit 0
+          fi
+          echo "Stopping RDS to save cost..."
+          aws rds stop-db-instance \
+            --db-instance-identifier "$DB_ID" \
+            --region "$REGION" \
+            --output text >/dev/null
+          for i in $(seq 1 30); do
+            STATUS=$(aws rds describe-db-instances \
+              --db-instance-identifier "$DB_ID" \
+              --region "$REGION" \
+              --query 'DBInstances[0].DBInstanceStatus' \
+              --output text)
+            echo "  status=$STATUS"
+            if [ "$STATUS" = "stopped" ]; then
+              echo "RDS stopped. Idle cost ~\$2/mo storage."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Stop requested — instance may still be stopping."

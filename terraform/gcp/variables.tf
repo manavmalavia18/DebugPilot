@@ -38,7 +38,7 @@ variable "db_tier" {
 variable "db_deletion_protection" {
   type        = bool
   default     = true
-  description = "GCP API guard against accidental Cloud SQL delete. Use scripts/pause-db.sh to stop compute billing."
+  description = "GCP API guard against accidental Cloud SQL delete. CI destroy workflow stops Cloud SQL after cluster teardown."
 }
 
 variable "node_count" {
