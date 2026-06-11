@@ -198,16 +198,60 @@ resource "helm_release" "argocd" {
 }
 
 resource "null_resource" "ingress_rules" {
+  triggers = {
+    cluster_issuer = filesha256("${path.module}/../../../k8s/ingress/aws/cluster-issuer.yaml")
+    grafana        = filesha256("${path.module}/../../../k8s/ingress/aws/grafana-ingress.yaml")
+    argocd         = filesha256("${path.module}/../../../k8s/ingress/aws/argocd-ingress.yaml")
+  }
+
   provisioner "local-exec" {
     command = <<-EOT
-      sleep 30
+      set -euo pipefail
+
+      echo "Waiting for ingress-nginx controller..."
+      kubectl wait --namespace ingress-nginx \
+        --for=condition=ready pod \
+        --selector=app.kubernetes.io/component=controller \
+        --timeout=600s
+
+      echo "Waiting for ingress-nginx admission webhook..."
+      for i in $(seq 1 60); do
+        if kubectl get endpoints ingress-nginx-controller-admission -n ingress-nginx \
+          -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; then
+          break
+        fi
+        sleep 5
+      done
+
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/cluster-issuer.yaml
-      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/debugpilot-ingress.yaml
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/grafana-ingress.yaml
       kubectl apply -f ${path.module}/../../../k8s/ingress/aws/argocd-ingress.yaml
     EOT
   }
   depends_on = [helm_release.cert_manager, helm_release.ingress_nginx]
+}
+
+resource "null_resource" "debugpilot_ingress" {
+  triggers = {
+    manifest = filesha256("${path.module}/../../../k8s/ingress/aws/debugpilot-ingress.yaml")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+
+      echo "Waiting for Argo CD to deploy debugpilot-api..."
+      for i in $(seq 1 60); do
+        kubectl get deployment debugpilot-api -n default >/dev/null 2>&1 && break
+        sleep 10
+      done
+      kubectl wait --for=condition=available deployment/debugpilot-api -n default --timeout=600s
+
+      kubectl apply -f ${path.module}/../../../k8s/ingress/aws/debugpilot-ingress.yaml
+    EOT
+  }
+
+  depends_on = [null_resource.ingress_rules, null_resource.argocd_app]
 }
 
 resource "null_resource" "debugpilot_secrets" {
@@ -254,6 +298,7 @@ resource "null_resource" "debugpilot_secrets" {
 resource "null_resource" "argocd_app" {
   provisioner "local-exec" {
     command = <<-EOT
+      set -euo pipefail
       sleep 15
       kubectl apply -f - <<YAML
       apiVersion: argoproj.io/v1alpha1
