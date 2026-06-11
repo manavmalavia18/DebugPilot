@@ -68,4 +68,4 @@ Or: GCP Console → **APIs & Services** → **Library** → enable **Cloud SQL A
 
 Use **Terraform GCP Cluster** in GitHub Actions: **destroy** tears down GKE and stops Cloud SQL (data kept); **apply** starts Cloud SQL if stopped and recreates the cluster.
 
-If GKE fails with `GCE_STOCKOUT` in `us-central1-c`, use `node_locations` in `terraform.tfvars` (see `terraform.tfvars.example`).
+If GKE hits `GCE_STOCKOUT`, **Terraform GCP Cluster → apply** retries zones automatically (`us-central1-a` → `f` → `c` → `b`). For local apply, set `node_locations` in `terraform.tfvars`.
