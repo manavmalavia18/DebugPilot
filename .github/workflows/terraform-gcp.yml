@@ -131,7 +131,51 @@ jobs:
 
       - name: Terraform Apply
         if: inputs.action == 'apply'
-        run: terraform apply -auto-approve -input=false
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+        run: |
+          PROJECT="$GCP_PROJECT_ID"
+          REGION="$GCP_REGION"
+          CLUSTER=debugpilot
+          ZONES=(us-central1-a us-central1-f us-central1-c us-central1-b)
+
+          delete_partial_cluster() {
+            if gcloud container clusters describe "$CLUSTER" \
+              --region="$REGION" --project="$PROJECT" >/dev/null 2>&1; then
+              echo "Deleting failed cluster before retry..."
+              gcloud container clusters delete "$CLUSTER" \
+                --region="$REGION" --project="$PROJECT" --quiet --async || true
+              for _ in $(seq 1 60); do
+                gcloud container clusters describe "$CLUSTER" \
+                  --region="$REGION" --project="$PROJECT" >/dev/null 2>&1 || return 0
+                sleep 10
+              done
+            fi
+          }
+
+          for zone in "${ZONES[@]}"; do
+            echo "=== Trying node_locations=[$zone] ==="
+            export TF_VAR_node_locations="[\"$zone\"]"
+            LOG="$(mktemp)"
+            set +e
+            terraform apply -auto-approve -input=false 2>&1 | tee "$LOG"
+            STATUS=${PIPESTATUS[0]}
+            set -e
+            if [ "$STATUS" -eq 0 ]; then
+              echo "Apply succeeded in $zone"
+              exit 0
+            fi
+            if ! grep -qE 'GCE_STOCKOUT|does not have enough resources available' "$LOG"; then
+              echo "Apply failed (not a stockout) — stopping."
+              exit "$STATUS"
+            fi
+            echo "Zone $zone stockout — trying next zone..."
+            rm -f "$LOG"
+            delete_partial_cluster
+          done
+          echo "All zones out of capacity."
+          exit 1
 
       - name: Cleanup GCP ingress DNS before destroy
         if: inputs.action == 'destroy'

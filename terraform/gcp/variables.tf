@@ -20,8 +20,8 @@ variable "gcp_zone" {
 
 variable "node_locations" {
   type        = list(string)
-  default     = ["us-central1-a", "us-central1-b"]
-  description = "Zones for regional GKE nodes; omit -c if it is out of capacity."
+  default     = ["us-central1-a"]
+  description = "Zones for regional GKE nodes; CI apply retries other zones on GCE_STOCKOUT."
 }
 
 variable "machine_type" {

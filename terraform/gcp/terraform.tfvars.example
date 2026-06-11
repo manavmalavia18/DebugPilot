@@ -1,7 +1,7 @@
 gcp_project_id       = "your-gcp-project-id"
 gcp_region           = "us-central1"
-# Skip us-central1-c if you hit GCE_STOCKOUT; or set gcp_zone = "us-central1-a" for zonal cluster
-node_locations       = ["us-central1-a", "us-central1-b"]
+# CI apply retries us-central1-a → f → c → b on GCE_STOCKOUT
+node_locations       = ["us-central1-a"]
 machine_type         = "e2-small"
 cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN"
 argocd_password      = "debugpilot123"
