@@ -26,7 +26,7 @@ variable "node_locations" {
 
 variable "machine_type" {
   type    = string
-  default = "e2-small"
+  default = "e2-medium"
 }
 
 variable "db_tier" {
