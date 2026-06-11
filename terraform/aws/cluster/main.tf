@@ -75,7 +75,7 @@ resource "helm_release" "external_dns" {
   chart            = "external-dns"
   namespace        = "external-dns"
   create_namespace = true
-  timeout          = 300
+  timeout          = 600
 
   values = [
     yamlencode({
@@ -92,6 +92,9 @@ resource "helm_release" "external_dns" {
       policy = "sync"
 
       txtOwnerId = "debugpilot-aws"
+
+      livenessProbe  = null
+      readinessProbe = null
 
       env = [
         {
@@ -127,17 +130,40 @@ resource "helm_release" "monitoring" {
   chart            = "kube-prometheus-stack"
   namespace        = "monitoring"
   create_namespace = true
-  timeout          = 900
+  timeout          = 1800
 
-  set {
-    name  = "grafana.adminPassword"
-    value = var.grafana_password
-  }
+  values = [
+    yamlencode({
+      alertmanager = {
+        enabled = false
+      }
 
-  set {
-    name  = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"
-    value = "false"
-  }
+      grafana = {
+        adminPassword = var.grafana_password
+      }
+
+      prometheus = {
+        prometheusSpec = {
+          serviceMonitorSelectorNilUsesHelmValues = false
+
+          resources = {
+            requests = {
+              cpu    = "200m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
+
+          startupProbe = {
+            failureThreshold = 120
+          }
+        }
+      }
+    })
+  ]
 
   depends_on = [null_resource.kubeconfig]
 }

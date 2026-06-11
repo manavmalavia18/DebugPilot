@@ -75,7 +75,7 @@ resource "helm_release" "external_dns" {
   chart            = "external-dns"
   namespace        = "external-dns"
   create_namespace = true
-  timeout          = 300
+  timeout          = 600
 
   values = [
     yamlencode({
@@ -92,8 +92,6 @@ resource "helm_release" "external_dns" {
       policy     = "sync"
       txtOwnerId = "debugpilot-gcp"
 
-      # The external-dns chart rendered invalid probe fields with enabled=false.
-      # Null removes the probes and prevents the GKE pod from being killed by /healthz failures.
       livenessProbe  = null
       readinessProbe = null
 
@@ -131,10 +129,14 @@ resource "helm_release" "monitoring" {
   chart            = "kube-prometheus-stack"
   namespace        = "monitoring"
   create_namespace = true
-  timeout          = 900
+  timeout          = 1800
 
   values = [
     yamlencode({
+      alertmanager = {
+        enabled = false
+      }
+
       grafana = {
         adminPassword = var.grafana_password
 
@@ -150,6 +152,17 @@ resource "helm_release" "monitoring" {
       prometheus = {
         prometheusSpec = {
           serviceMonitorSelectorNilUsesHelmValues = false
+
+          resources = {
+            requests = {
+              cpu    = "200m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
 
           startupProbe = {
             failureThreshold = 120
