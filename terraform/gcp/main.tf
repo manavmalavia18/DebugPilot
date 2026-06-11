@@ -230,6 +230,7 @@ resource "null_resource" "ingress_rules" {
   }
 
   provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
     command = <<-EOT
       set -euo pipefail
 
@@ -266,6 +267,7 @@ resource "null_resource" "debugpilot_ingress" {
   }
 
   provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
     command = <<-EOT
       set -euo pipefail
 
@@ -348,6 +350,7 @@ resource "null_resource" "debugpilot_secrets" {
 
 resource "null_resource" "argocd_app" {
   provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
     command = <<-EOT
       set -euo pipefail
       sleep 15
