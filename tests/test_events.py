@@ -5,7 +5,11 @@ from app.events.schema import IncidentEvent, build_github_external_id
 
 
 def test_build_github_external_id():
-    assert build_github_external_id("acme", "api", 12345) == "github:acme/api:12345"
+    assert build_github_external_id("acme", "api", 12345) == "github:acme/api:12345:1"
+    assert (
+        build_github_external_id("acme", "api", 12345, run_attempt=2)
+        == "github:acme/api:12345:2"
+    )
 
 
 def test_incident_event_roundtrip():

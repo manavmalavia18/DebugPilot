@@ -26,5 +26,5 @@ class IncidentEvent(BaseModel):
         return cls.model_validate_json(payload)
 
 
-def build_github_external_id(owner: str, repo: str, run_id: int) -> str:
-    return f"github:{owner}/{repo}:{run_id}"
+def build_github_external_id(owner: str, repo: str, run_id: int, *, run_attempt: int = 1) -> str:
+    return f"github:{owner}/{repo}:{run_id}:{run_attempt}"

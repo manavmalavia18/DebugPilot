@@ -97,6 +97,7 @@ def build_incident_from_workflow_run(payload: dict) -> IncidentEvent | None:
     actor_obj = run.get("actor") or {}
     actor = actor_obj.get("login")
     actor_github_id = actor_obj.get("id")
+    run_attempt = int(run.get("run_attempt") or 1)
     metadata = {
         "repo": f"{owner}/{repo_name}",
         "commit": (run.get("head_commit") or {}).get("id"),
@@ -105,13 +106,14 @@ def build_incident_from_workflow_run(payload: dict) -> IncidentEvent | None:
         "workflow_name": run.get("name"),
         "run_url": run.get("html_url"),
         "run_id": run_id,
+        "run_attempt": run_attempt,
         "event": run.get("event"),
         "branch": run.get("head_branch"),
     }
 
     return IncidentEvent(
         source="github_actions",
-        external_id=build_github_external_id(owner, repo_name, run_id),
+        external_id=build_github_external_id(owner, repo_name, run_id, run_attempt=run_attempt),
         log_text=log_text,
         source_hint="github_actions",
         metadata=metadata,
