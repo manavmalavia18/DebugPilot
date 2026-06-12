@@ -328,6 +328,10 @@ resource "null_resource" "strimzi_kafka" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
+      echo "Waiting for Strimzi CRDs to become established..."
+      for crd in kafkas.kafka.strimzi.io kafkatopics.kafka.strimzi.io kafkanodepools.kafka.strimzi.io; do
+        kubectl wait --for=condition=Established "crd/$crd" --timeout=300s
+      done
       kubectl apply -f ${path.module}/../../../k8s/kafka/
       echo "Waiting for Kafka cluster debugpilot to become ready..."
       kubectl wait kafka/debugpilot -n kafka --for=condition=Ready --timeout=900s
