@@ -1,0 +1,21 @@
+name: Kafka Webhook Test
+
+# Manual-only workflow to trigger DebugPilot's GitHub webhook on failure.
+# Run from Actions → Kafka Webhook Test → Run workflow.
+# Remove this file after validating the Kafka → consumer → History pipeline.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-on-purpose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate CI failure for DebugPilot
+        run: |
+          echo "##[error] Intentional failure for Kafka webhook pipeline test"
+          echo "pytest: assertion failed in test_kafka_webhook_smoke"
+          exit 1
