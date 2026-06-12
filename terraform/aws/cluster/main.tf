@@ -311,6 +311,7 @@ resource "helm_release" "strimzi_operator" {
   name             = "strimzi-kafka-operator"
   repository       = "https://strimzi.io/charts/"
   chart            = "strimzi-kafka-operator"
+  version          = "0.45.0"
   namespace        = "kafka"
   create_namespace = true
   timeout          = 600
@@ -332,7 +333,20 @@ resource "null_resource" "strimzi_kafka" {
       for crd in kafkas.kafka.strimzi.io kafkatopics.kafka.strimzi.io kafkanodepools.kafka.strimzi.io; do
         kubectl wait --for=condition=Established "crd/$crd" --timeout=300s
       done
-      kubectl apply -f ${path.module}/../../../k8s/kafka/
+      kubectl wait --for=condition=Available deployment/strimzi-cluster-operator -n kafka --timeout=300s
+      applied=false
+      for attempt in $(seq 1 30); do
+        if kubectl apply -f ${path.module}/../../../k8s/kafka/; then
+          applied=true
+          break
+        fi
+        echo "kubectl apply not ready yet (attempt $attempt/30)..."
+        sleep 5
+      done
+      if [ "$applied" != "true" ]; then
+        echo "kubectl apply failed after 30 attempts"
+        exit 1
+      fi
       echo "Waiting for Kafka cluster debugpilot to become ready..."
       kubectl wait kafka/debugpilot -n kafka --for=condition=Ready --timeout=900s
     EOT
@@ -341,8 +355,9 @@ resource "null_resource" "strimzi_kafka" {
   depends_on = [helm_release.strimzi_operator]
 
   triggers = {
-    kafka_manifest = filesha256("${path.module}/../../../k8s/kafka/kafka.yaml")
-    topic_manifest = filesha256("${path.module}/../../../k8s/kafka/kafka-topics.yaml")
+    kafka_manifest  = filesha256("${path.module}/../../../k8s/kafka/kafka.yaml")
+    topic_manifest  = filesha256("${path.module}/../../../k8s/kafka/kafka-topics.yaml")
+    strimzi_version = helm_release.strimzi_operator.version
   }
 }
 
