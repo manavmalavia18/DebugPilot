@@ -94,11 +94,14 @@ def build_incident_from_workflow_run(payload: dict) -> IncidentEvent | None:
     with httpx.Client(follow_redirects=True) as client:
         log_text = _fetch_failed_job_logs(client, owner, repo_name, run_id)
 
-    actor = (run.get("actor") or {}).get("login")
+    actor_obj = run.get("actor") or {}
+    actor = actor_obj.get("login")
+    actor_github_id = actor_obj.get("id")
     metadata = {
         "repo": f"{owner}/{repo_name}",
         "commit": (run.get("head_commit") or {}).get("id"),
         "actor": actor,
+        "actor_github_id": actor_github_id,
         "workflow_name": run.get("name"),
         "run_url": run.get("html_url"),
         "run_id": run_id,
