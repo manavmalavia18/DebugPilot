@@ -46,12 +46,22 @@ def json_bytes(payload: dict) -> bytes:
 def _process_message(payload: bytes) -> None:
     event = IncidentEvent.from_json_bytes(payload)
     actor = event.metadata.get("actor")
+    actor_github_id = event.metadata.get("actor_github_id")
+    if actor_github_id is not None:
+        try:
+            actor_github_id = int(actor_github_id)
+        except (TypeError, ValueError):
+            actor_github_id = None
     last_error: Exception | None = None
 
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
             with Session(engine) as session:
-                user_id = resolve_incident_user_id(session, actor=actor)
+                user_id = resolve_incident_user_id(
+                    session,
+                    actor=actor,
+                    actor_github_id=actor_github_id,
+                )
                 saved = process_incident_event(session, event, user_id)
                 if saved:
                     logger.info(
