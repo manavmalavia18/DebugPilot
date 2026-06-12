@@ -4,6 +4,13 @@ function confidenceDot(level) {
   return "bg-danger"
 }
 
+function sourceBadge(source) {
+  if (source === "github_actions") return { label: "GitHub", className: "text-info border-info/40" }
+  if (source === "alertmanager") return { label: "Alert", className: "text-warn border-warn/40" }
+  if (source === "kubernetes") return { label: "K8s", className: "text-accent border-accent/40" }
+  return { label: "Manual", className: "text-muted border-border" }
+}
+
 export default function HistoryPanel({ history, onSelect, onRefresh }) {
   return (
     <section className="border border-border bg-panel">
@@ -29,6 +36,7 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
             <thead className="border-b border-border text-[10px] uppercase tracking-wider text-muted">
               <tr>
                 <th className="px-4 py-3 font-normal">When</th>
+                <th className="px-4 py-3 font-normal">Source</th>
                 <th className="px-4 py-3 font-normal">Category</th>
                 <th className="px-4 py-3 font-normal">Symptom</th>
                 <th className="px-4 py-3 font-normal">File</th>
@@ -36,7 +44,9 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
               </tr>
             </thead>
             <tbody>
-              {history.map((item) => (
+              {history.map((item) => {
+                const badge = sourceBadge(item.ingestion_source || "manual")
+                return (
                 <tr
                   key={item.id}
                   onClick={() => onSelect(item.id)}
@@ -44,6 +54,13 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                 >
                   <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                     {new Date(item.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-wide ${badge.className}`}
+                    >
+                      {badge.label}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-info">{item.category}</td>
                   <td className="max-w-md truncate px-4 py-3 text-neutral-200">{item.symptom}</td>
@@ -72,7 +89,7 @@ export default function HistoryPanel({ history, onSelect, onRefresh }) {
                     </span>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

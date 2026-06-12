@@ -1,0 +1,25 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: incidents.raw
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: debugpilot
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: incidents.dlq
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: debugpilot
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: 2592000000

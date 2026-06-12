@@ -134,6 +134,9 @@ class SavedIncident(SQLModel, table=True):
     response_json: str
     resolution: Optional[str] = SQLField(default=None, max_length=2000)
     feedback: Optional[int] = SQLField(default=None)  # 1 = helpful, -1 = not helpful
+    ingestion_source: str = SQLField(default="manual", index=True)
+    external_id: Optional[str] = SQLField(default=None, index=True)
+    event_metadata_json: Optional[str] = SQLField(default=None)
 
 
 class IncidentChatMessage(SQLModel, table=True):
@@ -156,6 +159,7 @@ class SavedIncidentRead(BaseModel):
     source_filename: Optional[str] = None
     resolution: Optional[str] = None
     feedback: Optional[Literal["up", "down"]] = None
+    ingestion_source: str = "manual"
 
 
 class IncidentUpdateRequest(BaseModel):

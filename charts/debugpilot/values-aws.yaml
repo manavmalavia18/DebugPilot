@@ -2,8 +2,7 @@ redis:
   enabled: true
 
 api:
-  # Updated by CI on main when GAR repository debugpilot exists (GCP_PROJECT_ID secret)
-  image: us-central1-docker.pkg.dev/jobradar-497223/debugpilot/debugpilot-api:22ad7558a4ef95017e3ec445f41203c909dd41d5
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:22ad7558a4ef95017e3ec445f41203c909dd41d5
   replicas: 1
   hpa:
     enabled: true
@@ -16,8 +15,10 @@ api:
   anthropicSecretName: debugpilot-secrets
   anthropicSecretKey: ANTHROPIC_API_KEY
   redisUrl: redis://redis:6379/0
-  publicBaseUrl: https://debugpilot-gcp.manavmalavia.org
+  publicBaseUrl: https://debugpilot.manavmalavia.org
   authCookieSecure: true
+  uploadsS3Bucket: debugpilot-log-uploads-565273632019
+  awsRegion: us-east-1
   persistence:
     enabled: false
 

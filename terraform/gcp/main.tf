@@ -309,11 +309,13 @@ resource "null_resource" "debugpilot_secrets" {
 
   provisioner "local-exec" {
     environment = {
-      ANTHROPIC_API_KEY    = var.anthropic_api_key
-      GITHUB_CLIENT_ID     = var.github_client_id
-      GITHUB_CLIENT_SECRET = var.github_client_secret
-      JWT_SECRET           = var.jwt_secret
-      DATABASE_URL         = local.database_url
+      ANTHROPIC_API_KEY       = var.anthropic_api_key
+      GITHUB_CLIENT_ID        = var.github_client_id
+      GITHUB_CLIENT_SECRET    = var.github_client_secret
+      JWT_SECRET              = var.jwt_secret
+      DATABASE_URL            = local.database_url
+      GITHUB_WEBHOOK_SECRET   = var.github_webhook_secret
+      GITHUB_WEBHOOK_TOKEN    = var.github_webhook_token
     }
     command = <<-EOT
       EXTRA_ARGS=""
@@ -329,6 +331,12 @@ resource "null_resource" "debugpilot_secrets" {
       if [ -n "$DATABASE_URL" ]; then
         EXTRA_ARGS="$EXTRA_ARGS --from-literal=DATABASE_URL=$DATABASE_URL"
       fi
+      if [ -n "$GITHUB_WEBHOOK_SECRET" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=GITHUB_WEBHOOK_SECRET=$GITHUB_WEBHOOK_SECRET"
+      fi
+      if [ -n "$GITHUB_WEBHOOK_TOKEN" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --from-literal=GITHUB_WEBHOOK_TOKEN=$GITHUB_WEBHOOK_TOKEN"
+      fi
       kubectl create secret generic debugpilot-secrets \
         --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
         $EXTRA_ARGS \
@@ -342,9 +350,45 @@ resource "null_resource" "debugpilot_secrets" {
   ]
 
   triggers = {
-    api_key_hash = sha256(var.anthropic_api_key)
-    auth_hash    = sha256("${var.github_client_id}:${var.jwt_secret}")
-    db_hash      = sha256(local.database_url)
+    api_key_hash    = sha256(var.anthropic_api_key)
+    auth_hash       = sha256("${var.github_client_id}:${var.jwt_secret}")
+    db_hash         = sha256(local.database_url)
+    webhook_hash    = sha256("${var.github_webhook_secret}:${var.github_webhook_token}")
+  }
+}
+
+resource "helm_release" "strimzi_operator" {
+  name             = "strimzi-kafka-operator"
+  repository       = "https://strimzi.io/charts/"
+  chart            = "strimzi-kafka-operator"
+  namespace        = "kafka"
+  create_namespace = true
+  timeout          = 600
+
+  set {
+    name  = "watchNamespaces[0]"
+    value = "kafka"
+  }
+
+  depends_on = [null_resource.kubeconfig]
+}
+
+resource "null_resource" "strimzi_kafka" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      kubectl apply -f ${path.module}/../../k8s/kafka/
+      echo "Waiting for Kafka cluster debugpilot to become ready..."
+      kubectl wait kafka/debugpilot -n kafka --for=condition=Ready --timeout=900s
+    EOT
+  }
+
+  depends_on = [helm_release.strimzi_operator]
+
+  triggers = {
+    kafka_manifest = filesha256("${path.module}/../../k8s/kafka/kafka.yaml")
+    topic_manifest = filesha256("${path.module}/../../k8s/kafka/kafka-topics.yaml")
   }
 }
 
@@ -380,5 +424,9 @@ resource "null_resource" "argocd_app" {
     EOT
   }
 
-  depends_on = [helm_release.argocd, null_resource.debugpilot_secrets]
+  depends_on = [
+    helm_release.argocd,
+    null_resource.debugpilot_secrets,
+    null_resource.strimzi_kafka,
+  ]
 }
