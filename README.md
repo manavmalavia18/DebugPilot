@@ -1,7 +1,8 @@
 <h1 align="center">DebugPilot</h1>
 
 <p align="center">
-  <em>AI-powered DevOps incident debugger — paste infra logs, get root cause, safe commands, and fixes.</em>
+  <em>Paste a log. Get a diagnosis. Or don't paste at all — let your broken CI come to you.</em><br/>
+  <sub>AI DevOps debugger · Claude + playbooks · multi-cloud · now with Kafka ears</sub>
 </p>
 
 <p align="center">
@@ -20,6 +21,7 @@
 ## Table of contents
 
 - [Overview](#-overview)
+- [Why we added Kafka (the honest version)](#-why-we-added-kafka-the-honest-version)
 - [Tech stack](#-tech-stack)
 - [Multi-cloud infrastructure](#-multi-cloud-infrastructure)
 - [Architecture](#-architecture)
@@ -46,10 +48,63 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | Layer | Responsibility |
 |--------|----------------|
 | **Application** | FastAPI API, React ops UI, Postgres/SQLite history, semantic RAG playbooks, Redis analysis cache, Prometheus metrics |
+| **Event pipeline** | GitHub webhooks → Kafka → consumer → auto-analyzed incidents in History |
 | **Packaging** | Helm chart `charts/debugpilot`, multi-stage Docker image |
-| **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD |
-| **GCP** | GKE, Artifact Registry, same platform components, separate hostnames |
+| **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD, Strimzi Kafka |
+| **GCP** | GKE, Artifact Registry, same platform components, separate hostnames, Strimzi Kafka |
 | **Delivery** | GitHub Actions CI, GitOps sync, optional GitHub → Argo CD webhook |
+
+---
+
+## Why we added Kafka (the honest version)
+
+We shipped a debugger that asks you to **copy-paste logs**. That works great in a demo. It works less great when you're the same person who just broke `main` at 11pm and you're alt-tabbing between GitHub Actions, `kubectl`, and a textarea.
+
+So we asked a simple question: *what if the failure showed up in History before you went looking for it?*
+
+### The pipeline
+
+```
+GitHub Actions fails
+       │
+       ▼
+POST /webhooks/github  ──►  incidents.raw (Kafka)  ──►  debugpilot-consumer
+       │                           │                         │
+       │                           │                         ▼
+       │                           └── incidents.dlq ◄──  Claude + playbooks
+       │                              (if something breaks)      │
+       ▼                                                         ▼
+  202 accepted                                            History row appears
+  (with github_actions badge)                             in the UI — no paste
+```
+
+**Why Kafka and not "just call analyze() in the webhook handler"?**
+
+| Reason | What we were avoiding |
+|--------|------------------------|
+| **Decoupling** | GitHub expects a fast 202, not a 45s Claude round-trip |
+| **Retries** | Consumer retries with backoff; poison messages land in `incidents.dlq` |
+| **Backpressure** | Ten workflows fail at once? Queue absorbs the spike |
+| **Future sources** | Alertmanager and Kubernetes events slot in without rewriting the API |
+| **Dogfooding** | We run Strimzi on the same clusters we debug — ImagePullBackOff included |
+
+### War stories we earned along the way
+
+These are real, not resume fluff:
+
+- **Strimzi 1.0** dropped `v1beta2` — we pinned the operator, bumped Kafka to **4.1.2**, and waited for CRDs like adults.
+- **Incidents saved to the wrong user** — webhook actor `manavmalavia18` ≠ OAuth login `manavm18`. Fix: match by **GitHub numeric ID**, not username guessing.
+- **Re-run ≠ new incident** — GitHub reuses the same `workflow_run.id` on "Re-run failed jobs". Fix: include `run_attempt` in the dedup key so attempt 2 is its own row.
+- **The test workflow named `fail-on-purpose`** — yes, Claude correctly diagnosed our intentional `exit 1` as intentional. The pipeline works. You're welcome.
+
+### Wire it up (GCP example)
+
+1. **GitHub webhook** on your repo → `https://debugpilot-gcp.manavmalavia.org/webhooks/github`, event: **Workflow runs**
+2. Secrets: `DEBUGPILOT_WEBHOOK_SECRET` (HMAC), `DEBUGPILOT_WEBHOOK_TOKEN` (PAT with `actions:read` for job logs)
+3. Log into DebugPilot **once** with the GitHub account that triggers workflows — incidents map to your user by `github_id`
+4. Run **Kafka Webhook Test** (manual dispatch) to prove the loop; watch History populate with a `github_actions` badge
+
+Topics: `incidents.raw`, `incidents.dlq` · Bootstrap: `debugpilot-kafka-bootstrap.kafka.svc:9092`
 
 ---
 
@@ -63,6 +118,8 @@ The repository is both a **product** and a **platform showcase**: the same Helm 
 | AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
 | Persistence | **SQLModel**, **Postgres** (RDS on EKS) or **SQLite** locally | Saved incident history |
 | Cache | **Redis** (`redis:7-alpine` in Helm / compose) | Identical log + `source_hint` → cached JSON (default 7-day TTL); skips repeat Claude calls |
+| Events | **Apache Kafka** via **Strimzi 1.0** | `incidents.raw` queue, `incidents.dlq` dead-letter; producer in API, consumer deployment in Helm |
+| Webhooks | **GitHub `workflow_run`** HMAC | Failed Actions jobs → fetch logs via PAT → publish `IncidentEvent` |
 | Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
 | UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
 | HTTP client | **Axios** | Same-origin API in prod; `VITE_API_URL` for local dev |
@@ -203,6 +260,27 @@ flowchart LR
   Analyzer -->|save optional| DB
 ```
 
+### Event-driven ingestion (GitHub Actions → History)
+
+```mermaid
+sequenceDiagram
+  participant GH as GitHub Actions
+  participant WH as POST /webhooks/github
+  participant K as Kafka incidents.raw
+  participant C as debugpilot-consumer
+  participant AI as Claude + playbooks
+  participant H as History UI
+
+  GH->>WH: workflow_run completed (failure)
+  WH->>WH: verify HMAC, fetch job logs
+  WH->>K: publish IncidentEvent
+  WH-->>GH: 202 accepted
+  K->>C: consume message
+  C->>C: resolve user by github_id
+  C->>AI: analyze_log()
+  AI->>H: saved incident + github_actions badge
+```
+
 ### Multi-cloud traffic (simplified)
 
 ```mermaid
@@ -249,7 +327,8 @@ flowchart TB
                                              ▼
                                       ┌──────────────┐
                                       │ debugpilot-api │
-                                      │ redis        │
+                                      │ debugpilot-consumer │
+                                      │ redis · kafka  │
                                       └──────────────┘
 ```
 
@@ -415,12 +494,16 @@ Playbooks under `app/incidents/` are retrieved with **semantic RAG** (fastembed 
 ## Project layout
 
 ```
-├── app/                    # FastAPI backend + playbooks
-├── frontend/               # React UI
-├── charts/debugpilot/        # Helm (values.yaml + values-gcp.yaml)
-├── k8s/ingress/aws|gcp/  # Per-cloud Ingress + TLS
-├── terraform/aws|gcp/      # Multi-cloud IaC
-├── .github/workflows/      # CI, Deploy, Terraform
+├── app/
+│   ├── webhooks/github.py  # workflow_run → Kafka
+│   ├── consumer.py         # incidents.raw → analyze → DB
+│   └── events/             # schema, producer, user resolution
+├── frontend/               # React UI (History badges per ingestion source)
+├── charts/debugpilot/      # Helm — api, consumer, redis (values.yaml + values-gcp.yaml)
+├── k8s/kafka/              # Strimzi Kafka + topic CRs
+├── k8s/ingress/aws|gcp/    # Per-cloud Ingress + TLS
+├── terraform/aws|gcp/      # Multi-cloud IaC + Strimzi operator
+├── .github/workflows/      # CI, Deploy, Terraform, kafka-webhook-test
 ├── tests/
 ├── Dockerfile
 └── start.sh
@@ -468,6 +551,7 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | `GET` | `/incidents` | List saved analyses |
 | `GET` | `/incidents/{id}` | Get one analysis |
 | `GET` | `/metrics` | Prometheus metrics |
+| `POST` | `/webhooks/github` | GitHub `workflow_run` failures → Kafka (HMAC `X-Hub-Signature-256`) |
 | `GET` | `/docs` | OpenAPI |
 
 ---
@@ -482,6 +566,7 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | **Terraform AWS Cluster** | Manual | plan / apply / destroy EKS |
 | **Terraform GCP Foundation** | Manual | Artifact Registry + state |
 | **Terraform GCP Cluster** | Manual | plan / apply / destroy GKE |
+| **Kafka Webhook Test** | Manual dispatch | Intentionally fails to validate webhook → Kafka → History (remove after validation) |
 
 ### Repository secrets (Terraform / CI)
 
@@ -494,6 +579,8 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | `DEBUGPILOT_OAUTH_CLIENT_ID_GCP` | OAuth Client ID for GCP (`debugpilot-gcp.manavmalavia.org`) |
 | `DEBUGPILOT_OAUTH_CLIENT_SECRET_GCP` | OAuth client secret for GCP |
 | `JWT_SECRET` | Session cookie signing — same value on both clouds (`openssl rand -hex 32`) |
+| `DEBUGPILOT_WEBHOOK_SECRET` | HMAC secret for `POST /webhooks/github` (cannot use `GITHUB_` prefix) |
+| `DEBUGPILOT_WEBHOOK_TOKEN` | GitHub PAT with `actions:read` — API fetches failed job logs |
 
 ### GitHub sign-in (abuse protection)
 
@@ -569,6 +656,10 @@ Markdown guides in `app/incidents/`:
 | CORS / localhost from live site | Old frontend bundle | Use current `main` (same-origin API) |
 | GCP works, AWS doesn’t | Separate hostnames / records | Verify `debugpilot` vs `debugpilot-gcp` records independently |
 | Every analyze hits Claude | Redis missing or wrong URL | `kubectl get pods -l app=redis`; confirm `REDIS_URL=redis://redis:6379/0` on API deployment |
+| Webhook 200 ignored | Run succeeded or wrong event type | Only `workflow_run` + `conclusion=failure` are queued |
+| Incident in DB but not in UI | Wrong GitHub user mapping | Log in with the account that triggered the workflow |
+| Re-run didn't create row | Same `run_id` deduped | Needs `run_attempt` in external_id (see [Why Kafka](#-why-we-added-kafka-the-honest-version)) |
+| Consumer silent | Kafka not ready or env missing | `kubectl -n kafka get kafka`; check `KAFKA_BOOTSTRAP_SERVERS` on API + consumer |
 
 ---
 
@@ -579,5 +670,6 @@ Markdown guides in `app/incidents/`:
 ---
 
 <p align="center">
-  <sub>FastAPI · React · Claude · Terraform · AWS EKS · GCP GKE · Helm · Argo CD · external-dns</sub>
+  <sub>FastAPI · React · Claude · Kafka · Strimzi · Terraform · AWS EKS · GCP GKE · Helm · Argo CD</sub><br/>
+  <sub><em>Built by someone who got tired of pasting their own CI logs.</em></sub>
 </p>
