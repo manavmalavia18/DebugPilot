@@ -1,539 +1,471 @@
 <h1 align="center">DebugPilot</h1>
 
 <p align="center">
-  <em>Paste a log. Get a diagnosis. Or don't paste at all — let your broken CI come to you.</em><br/>
-  <sub>AI DevOps debugger · Claude + playbooks · multi-cloud · now with Kafka ears</sub>
+  <strong>Your AI copilot for infrastructure failures.</strong><br/>
+  <em>Paste a messy log from Kubernetes, Terraform, CI, or Docker — get a clear explanation, safe commands, and a fix plan.</em>
 </p>
 
 <p align="center">
   <a href="https://debugpilot.manavmalavia.org">Live demo (AWS)</a> ·
-  <a href="#-quick-start-local">Local setup</a> ·
-  <a href="#-multi-cloud-infrastructure">Multi-cloud</a> ·
-  <a href="#-dns-external-dns-and-failover-behavior">DNS</a>
+  <a href="https://debugpilot-gcp.manavmalavia.org">Live demo (GCP)</a> ·
+  <a href="#getting-started-locally">Run it locally</a> ·
+  <a href="#how-it-works">How it works</a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/analyze.png" alt="DebugPilot analyze screen — log input, AI diagnosis, and playbook match badge" width="720" />
+  <img src="docs/screenshots/analyze.png" alt="DebugPilot — log input on the left, AI diagnosis on the right" width="720" />
 </p>
 
 ---
 
 ## Table of contents
 
-- [Overview](#-overview)
-- [Why we added Kafka (the honest version)](#-why-we-added-kafka-the-honest-version)
-- [Tech stack](#-tech-stack)
-- [Multi-cloud infrastructure](#-multi-cloud-infrastructure)
-- [Architecture](#-architecture)
-- [How deployment works](#-how-deployment-works)
-- [DNS, external-dns, and failover behavior](#-dns-external-dns-and-failover-behavior)
-- [Quick start (local)](#-quick-start-local)
-- [What an analysis returns](#-what-an-analysis-returns)
-- [Project layout](#-project-layout)
-- [Local development](#-local-development)
-- [API reference](#-api-reference)
-- [GitHub Actions](#-github-actions)
-- [Operational runbooks](#-operational-runbooks)
-- [Troubleshooting](#-troubleshooting)
-- [Author](#-author)
+- [What is DebugPilot?](#what-is-debugpilot)
+- [Who is this for?](#who-is-this-for)
+- [The problem it solves](#the-problem-it-solves)
+- [How it works](#how-it-works)
+- [Core features](#core-features)
+- [How the AI side works](#how-the-ai-side-works)
+- [Architecture](#architecture)
+- [What's in this repository](#whats-in-this-repository)
+- [Tech stack](#tech-stack)
+- [Getting started locally](#getting-started-locally)
+- [What an analysis returns](#what-an-analysis-returns)
+- [Running in production (multi-cloud)](#running-in-production-multi-cloud)
+- [DNS and external-dns](#dns-and-external-dns)
+- [API reference](#api-reference)
+- [GitHub Actions and secrets](#github-actions-and-secrets)
+- [Operational playbooks](#operational-playbooks)
+- [Troubleshooting](#troubleshooting)
+- [Author](#author)
 
 ---
 
-## Overview
+## What is DebugPilot?
 
-**DebugPilot** is a full-stack application for debugging infrastructure failures. Paste logs from **Kubernetes**, **Terraform**, **GitHub Actions**, or **Docker** and receive a structured diagnosis from **Claude**, enriched by markdown **playbooks** in `app/incidents/` (real incidents from multi-cloud deployments: Redis in K8s, ImagePullBackOff, Ingress 503, Terraform state lock, external-dns stale CNAME, and more).
+**DebugPilot** is a web application that helps you understand **why something broke** in your infrastructure.
 
-The repository is both a **product** and a **platform showcase**: the same Helm chart and CI pipeline can run on **AWS EKS** or **GCP GKE**, with isolated DNS hostnames per cloud.
+When a deployment fails, a pod crashes, Terraform locks state, or a GitHub Actions job exits with code 1, you usually get a wall of text — stack traces, kubectl output, provider errors. Reading that under pressure is hard, especially if you're still learning DevOps.
 
-| Layer | Responsibility |
-|--------|----------------|
-| **Application** | FastAPI API, React ops UI, Postgres/SQLite history, semantic RAG playbooks, Redis analysis cache, Prometheus metrics |
-| **Event pipeline** | GitHub webhooks → Kafka → consumer → auto-analyzed incidents in History |
-| **Packaging** | Helm chart `charts/debugpilot`, multi-stage Docker image |
-| **AWS** | EKS, ECR, VPC, ingress-nginx, external-dns, cert-manager, Argo CD, Strimzi Kafka |
-| **GCP** | GKE, Artifact Registry, same platform components, separate hostnames, Strimzi Kafka |
-| **Delivery** | GitHub Actions CI, GitOps sync, optional GitHub → Argo CD webhook |
+DebugPilot takes that log text and returns a **structured report**:
+
+- What **symptom** you are seeing  
+- What **actually failed**  
+- The most likely **root cause**  
+- **Commands** you can run to investigate further (read-only first)  
+- A **likely fix** and **prevention** tips  
+
+It is built for **real ops work**, not toy demos. The same codebase runs on your laptop for development and on **AWS EKS** or **Google GKE** in production.
 
 ---
 
-## Why we added Kafka (the honest version)
+## Who is this for?
 
-We shipped a debugger that asks you to **copy-paste logs**. That works great in a demo. It works less great when you're the same person who just broke `main` at 11pm and you're alt-tabbing between GitHub Actions, `kubectl`, and a textarea.
+| You are… | How DebugPilot helps |
+|----------|----------------------|
+| **Learning DevOps** | Turn cryptic logs into plain explanations you can learn from |
+| **A platform / SRE engineer** | Speed up triage; save resolutions so similar failures get faster answers |
+| **A builder showing your work** | Full-stack app + AI + Kubernetes + Terraform + CI — one cohesive project |
+| **Someone on call** | Paste or upload a log, get commands and context without starting from zero |
 
-So we asked a simple question: *what if the failure showed up in History before you went looking for it?*
+You do **not** need to understand every tool in the stack to *use* the app. You paste a log and read the result. The README below explains how the pieces fit together if you want to go deeper.
 
-### The pipeline
+---
+
+## The problem it solves
+
+Infrastructure failures share a pattern:
+
+1. Something breaks (deploy, pipeline, cluster, DNS, cert, database connection…).  
+2. A tool prints a **log** — often long, noisy, and unfamiliar.  
+3. You search docs, Slack, or Google while production or your interview demo waits.  
+4. You might fix it once and forget *why* it worked.
+
+DebugPilot shortens step 3 and remembers step 4.
+
+It does **not** replace your judgment. It gives you a **first pass**: categorized failure, suggested commands, and links to internal **playbooks** (markdown guides written from real incidents on this project). You confirm before running anything destructive.
+
+---
+
+## How it works
+
+Think of three layers: **you**, the **app**, and the **AI + knowledge base**.
+
+```mermaid
+flowchart LR
+  subgraph you [You]
+    Log[Paste or upload a log]
+    UI[Web UI]
+  end
+  subgraph app [DebugPilot app]
+    API[FastAPI backend]
+    History[(Incident history)]
+    Cache[(Redis cache)]
+    Books[Playbooks on disk]
+  end
+  subgraph brain [Analysis]
+    RAG[Find similar playbooks]
+    Claude[Claude AI]
+  end
+  Log --> UI --> API
+  API --> RAG --> Books
+  API --> Cache
+  Cache -->|cache miss| Claude
+  RAG --> Claude
+  Claude --> API --> UI
+  API --> History
+```
+
+### Step-by-step: analyzing a log
+
+1. **Open the UI** — locally at http://localhost:5173 or the live demo URLs above.  
+2. **Paste log text** or **upload** a `.log` / `.txt` file (max 512 KB).  
+3. **Optional:** pick a source hint (Kubernetes, Terraform, GitHub Actions, Docker). If you skip this, the app guesses from keywords in the log.  
+4. **Click Analyze.** The backend:
+   - Detects the log type (e.g. CI vs Kubernetes).  
+   - Looks up **similar playbooks** from `app/incidents/` using semantic search.  
+   - Checks **Redis** — if you analyzed the same log before, returns the cached answer instantly.  
+   - Otherwise sends log + playbook context to **Claude** and parses a structured JSON response.  
+5. **Read the diagnosis** — symptom, root cause, commands, fix.  
+6. **Optional:** save to **History**, give thumbs up/down, add a **confirmed fix** so the next similar incident benefits.  
+7. **Optional:** open **follow-up chat** to ask questions about that incident.
+
+### Step-by-step: automatic incidents (optional)
+
+In production you can also connect **GitHub Actions**. When a workflow **fails**, GitHub notifies DebugPilot, which queues the failure, fetches job logs, runs the same analysis pipeline, and adds a row to **History** — often before you paste anything.
+
+That path uses a **message queue** (Kafka) so the webhook responds quickly and analysis happens in the background. Manual paste and automatic ingestion share the same AI and history; only the *entry point* differs.
+
+---
+
+## Core features
+
+### Log analysis
+
+- Paste text or upload files.  
+- Auto-detects source category from log content.  
+- Returns structured fields (not a single blob of prose).  
+- Surfaces **matched playbooks** with confidence scores.
+
+### Incident history
+
+- Every saved analysis is stored per user (when GitHub login is enabled).  
+- Re-open past incidents from the **History** tab.  
+- Badge shows how the incident arrived: manual paste, GitHub Actions, etc.  
+- **Feedback** (helpful / not helpful) and **confirmed fix** fields improve future answers.
+
+### Follow-up chat
+
+- After an analysis, ask clarifying questions in context of that incident.  
+- Uses the same Claude integration with incident-specific context.
+
+### Semantic playbook library
+
+- Markdown files in `app/incidents/` document real failures (Ingress 503, ImagePullBackOff, Terraform state lock, stale DNS, Redis misconfiguration in K8s, etc.).  
+- The app retrieves the most relevant playbooks and passes them to Claude — **RAG** (retrieval-augmented generation): the model answers using your project's runbooks, not only its training data.
+
+### Caching
+
+- Identical log + source hint → served from **Redis** (no extra API cost, faster response).  
+- UI shows whether the result was cached and how long analysis took.
+
+### Authentication
+
+- Production clusters use **GitHub OAuth** so `/analyze` and `/incidents` are not open to the world.  
+- Local dev works without OAuth — a built-in `dev` user is used automatically.
+
+### Log uploads (AWS)
+
+- On EKS, uploads can go to **S3**; locally they use a folder on disk.
+
+### Metrics
+
+- Prometheus metrics at `/metrics` (cache hits/misses, request instrumentation).
+
+### Multi-cloud deployment
+
+- One application, two live environments: **AWS** and **GCP**, with separate hostnames and isolated DNS — same Helm chart, different `values` files.
+
+---
+
+## How the AI side works
+
+This section is for readers who want to understand *what happens under the hood* without reading every Python file.
+
+| Concept | Plain English |
+|---------|----------------|
+| **Claude** | Anthropic's language model. It reads your log + context and writes the diagnosis. Model default: `claude-sonnet-4-5`. |
+| **Playbook** | A short markdown guide for one failure type, e.g. "Ingress returns 503". Stored in `app/incidents/`. |
+| **RAG** | Before calling Claude, the app **retrieves** the best-matching playbooks using embeddings (vector similarity). Only strong matches (≥70% score) are included. |
+| **Incident history context** | For new analyses, similar *past saved incidents* can also be injected so Claude sees how you fixed something before. |
+| **Redis cache** | Key = hash of log text + source + model version. TTL default 7 days. Bump `ANALYSIS_CACHE_VERSION` when you change prompts or playbooks. |
+| **Structured output** | Claude is prompted to return JSON fields (symptom, root_cause, commands, etc.) so the UI can render them consistently. |
+
+**Why playbooks matter:** Generic AI can hallucinate fixes. Grounding answers in your own incident notes makes responses more trustworthy for *this* stack (EKS, GKE, Argo CD, external-dns, etc.).
+
+---
+
+## Architecture
+
+### Application components
 
 ```
-GitHub Actions fails
-       │
-       ▼
-POST /webhooks/github  ──►  incidents.raw (Kafka)  ──►  debugpilot-consumer
-       │                           │                         │
-       │                           │                         ▼
-       │                           └── incidents.dlq ◄──  Claude + playbooks
-       │                              (if something breaks)      │
-       ▼                                                         ▼
-  202 accepted                                            History row appears
-  (with github_actions badge)                             in the UI — no paste
+┌─────────────────────────────────────────────────────────────┐
+│  React UI (Vite + Tailwind)                                  │
+│  Analyze · History · Login · Chat · Upload                   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ HTTPS / same-origin API
+┌───────────────────────────▼─────────────────────────────────┐
+│  FastAPI (Python)                                            │
+│  /analyze · /incidents · /uploads · /auth · /webhooks       │
+│  analyzer.py · retrieval.py · incident_save.py               │
+└─────┬──────────────┬──────────────┬──────────────┬──────────┘
+      │              │              │              │
+      ▼              ▼              ▼              ▼
+  Postgres/      Redis          Playbooks      Claude API
+  SQLite         cache          .md files
 ```
 
-**Why Kafka and not "just call analyze() in the webhook handler"?**
+### Production platform (each cloud)
 
-| Reason | What we were avoiding |
-|--------|------------------------|
-| **Decoupling** | GitHub expects a fast 202, not a 45s Claude round-trip |
-| **Retries** | Consumer retries with backoff; poison messages land in `incidents.dlq` |
-| **Backpressure** | Ten workflows fail at once? Queue absorbs the spike |
-| **Future sources** | Alertmanager and Kubernetes events slot in without rewriting the API |
-| **Dogfooding** | We run Strimzi on the same clusters we debug — ImagePullBackOff included |
+```
+Internet → Cloudflare DNS → Cloud Load Balancer → ingress-nginx
+                                                      │
+                    ┌─────────────────────────────────┼─────────────────┐
+                    ▼                                 ▼                 ▼
+            debugpilot-api                    debugpilot-consumer    redis
+            (API + static UI)                 (background jobs)      (cache)
+                    │                                 │
+                    └─────────────┬───────────────────┘
+                                  ▼
+                            Postgres (RDS / Cloud SQL)
+```
 
-### War stories we earned along the way
+**GitOps:** Argo CD watches this Git repo and syncs the Helm chart when `main` changes. **CI** builds the Docker image, pushes to ECR and Artifact Registry, and updates the image tag in `values.yaml` / `values-gcp.yaml`.
 
-These are real, not resume fluff:
+**Terraform** creates the cluster, ingress, cert-manager, external-dns, monitoring, and Argo CD — split into *foundation* (long-lived registry) and *cluster* (can be destroyed/recreated).
 
-- **Strimzi 1.0** dropped `v1beta2` — we pinned the operator, bumped Kafka to **4.1.2**, and waited for CRDs like adults.
-- **Incidents saved to the wrong user** — webhook actor `manavmalavia18` ≠ OAuth login `manavm18`. Fix: match by **GitHub numeric ID**, not username guessing.
-- **Re-run ≠ new incident** — GitHub reuses the same `workflow_run.id` on "Re-run failed jobs". Fix: include `run_attempt` in the dedup key so attempt 2 is its own row.
-- **The test workflow named `fail-on-purpose`** — yes, Claude correctly diagnosed our intentional `exit 1` as intentional. The pipeline works. You're welcome.
+### Automatic ingestion (high level)
 
-### Wire it up (GCP example)
+When enabled on a cluster:
 
-1. **GitHub webhook** on your repo → `https://debugpilot-gcp.manavmalavia.org/webhooks/github`, event: **Workflow runs**
-2. Secrets: `DEBUGPILOT_WEBHOOK_SECRET` (HMAC), `DEBUGPILOT_WEBHOOK_TOKEN` (PAT with `actions:read` for job logs)
-3. Log into DebugPilot **once** with the GitHub account that triggers workflows — incidents map to your user by `github_id`
-4. Run **Kafka Webhook Test** (manual dispatch) to prove the loop; watch History populate with a `github_actions` badge
+```
+GitHub workflow fails → webhook → API enqueues event → worker analyzes → History
+```
 
-Topics: `incidents.raw`, `incidents.dlq` · Bootstrap: `debugpilot-kafka-bootstrap.kafka.svc:9092`
+Kafka decouples "GitHub needs a fast HTTP response" from "Claude needs several seconds." Details live in `app/webhooks/github.py`, `app/consumer.py`, and `k8s/kafka/`. Local development does not require Kafka.
+
+---
+
+## What's in this repository
+
+```
+jobradar/   (repo name; product is DebugPilot)
+├── app/                      # Python backend
+│   ├── main.py               # Routes, auth, analyze, incidents
+│   ├── analyzer.py           # Log detection, cache, orchestration
+│   ├── ai.py                 # Claude calls
+│   ├── retrieval.py          # Playbook embedding search
+│   ├── incidents/*.md        # Playbook library (RAG)
+│   ├── webhooks/             # GitHub workflow_run handler
+│   └── consumer.py           # Background incident processor
+├── frontend/                 # React SPA
+├── charts/debugpilot/        # Kubernetes Helm chart
+├── k8s/
+│   ├── ingress/aws|gcp/      # Hostnames and TLS per cloud
+│   └── kafka/                # Strimzi Kafka (production)
+├── terraform/aws|gcp/        # Infrastructure as code
+├── tests/                    # pytest
+├── Dockerfile                # Multi-stage: build UI + API image
+├── docker-compose.yml        # API + Redis for local dev
+└── start.sh                  # One-command local startup
+```
 
 ---
 
 ## Tech stack
 
-### Application layer
+### Application
 
-| Component | Technology | Role |
-|-----------|------------|------|
-| API | **Python 3.12**, **FastAPI** | REST endpoints, OpenAPI, static UI in production |
-| AI | **Anthropic Claude** (`claude-sonnet-4-5`) | Log analysis with structured JSON output |
-| Persistence | **SQLModel**, **Postgres** (RDS on EKS) or **SQLite** locally | Saved incident history |
-| Cache | **Redis** (`redis:7-alpine` in Helm / compose) | Identical log + `source_hint` → cached JSON (default 7-day TTL); skips repeat Claude calls |
-| Events | **Apache Kafka** via **Strimzi 1.0** | `incidents.raw` queue, `incidents.dlq` dead-letter; producer in API, consumer deployment in Helm |
-| Webhooks | **GitHub `workflow_run`** HMAC | Failed Actions jobs → fetch logs via PAT → publish `IncidentEvent` |
-| Metrics | **prometheus-fastapi-instrumentator** | `/metrics` for Prometheus scraping |
-| UI | **React 19**, **Vite**, **Tailwind CSS 4** | Terminal-style ops console |
-| HTTP client | **Axios** | Same-origin API in prod; `VITE_API_URL` for local dev |
-| Testing | **pytest**, **ruff** | API tests and lint in CI |
+| Piece | Technology | What it does |
+|-------|------------|--------------|
+| Backend | Python 3.12, FastAPI | REST API, serves built React app in production |
+| Frontend | React 19, Vite, Tailwind CSS 4 | Ops-style UI: analyze, history, chat |
+| AI | Anthropic Claude | Log → structured diagnosis |
+| Database | SQLModel + Postgres (prod) or SQLite (local) | Users, saved incidents, chat messages |
+| Cache | Redis 7 | Repeat analyses without calling Claude again |
+| Search | fastembed + cosine similarity | Pick relevant playbooks |
+| Auth | GitHub OAuth + JWT cookie | Per-user history in production |
+| Tests | pytest, ruff | CI quality gates |
 
-### Container & build
+### Platform (when deployed to Kubernetes)
 
-| Component | Technology | Role |
-|-----------|------------|------|
-| Image | **Multi-stage Dockerfile** | Stage 1: `npm run build` → Stage 2: Python slim + `frontend/dist` |
-| Registries | **AWS ECR**, **GCP Artifact Registry** | Same image tag pushed to both on `main` |
-| Local | **docker-compose**, **start.sh** | Optional container or scripted dev environment |
-
-### AWS platform (EKS)
-
-| Component | Technology | Role |
-|-----------|------------|------|
-| Compute | **Amazon EKS 1.34**, managed node group (`t3.small`) | Kubernetes control plane and workers |
-| Network | **VPC** (public subnets), **Internet Gateway** | Cluster networking |
-| Registry | **ECR** `debugpilot-api` | Container images (bootstrap stack) |
-| Ingress | **ingress-nginx** (NLB/ELB) | HTTP/S routing to services |
-| DNS | **external-dns** + **Cloudflare** provider | Syncs Ingress hostnames → Cloudflare records |
-| TLS | **cert-manager**, Let's Encrypt (`letsencrypt-prod`) | TLS secrets per hostname |
-| GitOps | **Argo CD** | Syncs `charts/debugpilot` from GitHub `main` |
-| Observability | **kube-prometheus-stack** | Prometheus + Grafana |
-| IaC | **Terraform** (`terraform/aws/bootstrap`, `terraform/aws/cluster`) | Bootstrap vs cluster state split |
-
-### GCP platform (GKE)
-
-| Component | Technology | Role |
-|-----------|------------|------|
-| Compute | **Google GKE**, regional cluster | Parallel stack to AWS |
-| Registry | **Artifact Registry** `debugpilot/debugpilot-api` | Same CI image tags as ECR |
-| Network | **VPC** module (`terraform/gcp/modules/network`) | GKE networking |
-| Ingress / DNS / TLS | Same pattern as AWS | **Different hostnames** (see below) |
-| GitOps | **Argo CD** with `values-gcp.yaml` | Same chart, GCP-specific image registry path |
-| IaC | **Terraform** (`terraform/gcp/foundation`, `terraform/gcp`) | Foundation (GAR, state) + cluster |
-
-### CI/CD & GitOps
-
-| Component | Technology | Role |
-|-----------|------------|------|
-| CI | **GitHub Actions** | Test, lint, Helm validate, buildx push amd64+arm64 |
-| GitOps | **Argo CD** automated sync + self-heal | Cluster follows `charts/debugpilot` on `main` |
-| Webhook | **GitHub → `/api/webhook`** | Near-instant refresh on push (vs ~3 min poll) |
-| Deploy workflow | Manual dispatch | Optional rollout / image patch when not using Helm release |
+| Piece | Technology | What it does |
+|-------|------------|--------------|
+| Orchestration | AWS EKS or Google GKE | Runs containers |
+| Packaging | Helm | One chart deploys API, Redis, consumer, HPA, ServiceMonitor |
+| Ingress | ingress-nginx | Routes HTTPS to services |
+| DNS | external-dns + Cloudflare | Creates DNS records from Ingress hostnames |
+| TLS | cert-manager + Let's Encrypt | Automatic certificates |
+| GitOps | Argo CD | Cluster state follows Git `main` |
+| Observability | kube-prometheus-stack | Prometheus + Grafana |
+| IaC | Terraform | VPC, cluster, platform Helm releases |
+| Registry | ECR (AWS) / Artifact Registry (GCP) | Stores `debugpilot-api` images |
+| Events (optional) | Kafka via Strimzi | Queue for webhook-driven incidents |
 
 ---
 
-## Multi-cloud infrastructure
+## Getting started locally
 
-DebugPilot is designed to run in **either** cloud without changing application code. Terraform and ingress manifests are **split by cloud** so AWS and GCP can coexist in the same Cloudflare zone without overwriting each other.
+No Kubernetes required. This is the fastest way to understand the product.
 
-### Live endpoints
+### Prerequisites
+
+| Tool | Notes |
+|------|--------|
+| Python 3.12+ | Backend |
+| Node.js 22+ | Frontend dev server |
+| Anthropic API key | [console.anthropic.com](https://console.anthropic.com/) |
+| Redis (optional) | Speeds up repeat analyses; `docker compose` includes it |
+
+### Quick start
+
+```bash
+git clone https://github.com/manavmalavia18/DebugPilot.git
+cd DebugPilot
+cp .env.example .env
+# Edit .env — set ANTHROPIC_API_KEY
+
+chmod +x start.sh
+./start.sh
+```
+
+- UI: http://localhost:5173  
+- API: http://localhost:8000  
+- API docs: http://localhost:8000/docs  
+
+Try pasting content from `sample.log` in the repo root.
+
+**With Redis:**
+
+```bash
+docker compose up --build
+# In another terminal: ./start.sh  (or open http://localhost:8000 after frontend build)
+```
+
+**Run tests:**
+
+```bash
+pytest tests/ -v
+```
+
+OAuth is **off** locally unless you set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`. The API uses a `dev` user so you can analyze immediately.
+
+---
+
+## What an analysis returns
+
+| Field | Meaning |
+|-------|---------|
+| **category** | kubernetes, terraform, github_actions, docker, app, or unknown |
+| **symptom** | What you would observe externally |
+| **what_failed** | Component or step that broke |
+| **root_cause** | Most likely explanation |
+| **confidence** | low / medium / high |
+| **debug_commands** | Suggested read-only commands (copy buttons in UI) |
+| **likely_fix** | What to change or try next |
+| **prevention** | How to avoid a repeat |
+| **warnings** | Destructive or risky actions called out explicitly |
+| **playbook_matches** | Which internal guides were used |
+
+Responses also include `cached` (boolean) and `duration_ms` when using `/analyze`.
+
+---
+
+## Running in production (multi-cloud)
+
+DebugPilot is deployed as a **reference architecture**: same app on **two clouds** with separate DNS names so nothing steps on the other.
+
+### Live URLs
 
 | Service | AWS (EKS) | GCP (GKE) |
 |---------|-----------|-----------|
-| **API** | https://debugpilot.manavmalavia.org | https://debugpilot-gcp.manavmalavia.org |
+| **App** | https://debugpilot.manavmalavia.org | https://debugpilot-gcp.manavmalavia.org |
 | **Grafana** | https://debugpilot-grafana.manavmalavia.org | https://debugpilot-gcp-grafana.manavmalavia.org |
 | **Argo CD** | https://debugpilot-argocd.manavmalavia.org | https://debugpilot-gcp-argocd.manavmalavia.org |
 
-### Isolation strategy
+### Why two clouds?
 
-| Concern | AWS | GCP |
-|---------|-----|-----|
-| Terraform path | `terraform/aws/` | `terraform/gcp/` |
-| Ingress manifests | `k8s/ingress/aws/` | `k8s/ingress/gcp/` |
-| external-dns `txtOwnerId` | `debugpilot-aws` | `debugpilot-gcp` |
-| DNS record prefix | `debugpilot`, `debugpilot-grafana`, … | `debugpilot-gcp`, `debugpilot-gcp-grafana`, … |
-| Image registry | ECR | Artifact Registry |
-| Helm values file | `charts/debugpilot/values.yaml` | `charts/debugpilot/values-gcp.yaml` |
+- Proves the Helm chart and CI are **portable** (not tied to one vendor).  
+- Separate `txtOwnerId` and hostname prefixes (`debugpilot` vs `debugpilot-gcp`) so **DNS records do not conflict** in one Cloudflare zone.  
+- Destroying AWS does not delete GCP records (and vice versa).
 
-CI pushes **one build** to **both** registries; each cluster’s Argo CD Application points at the registry and values file for that cloud.
+### Bring-up order (summary)
+
+**AWS**
+
+1. `Terraform AWS Foundation` → ECR repository  
+2. Push to `main` → CI builds image, updates `charts/debugpilot/values.yaml`  
+3. `Terraform AWS Cluster` → apply → EKS + platform + Argo CD Application  
+4. Verify `curl https://debugpilot.manavmalavia.org/health`
+
+**GCP**
+
+1. `Terraform GCP Foundation` → Artifact Registry + state bucket  
+2. `Terraform GCP Cluster` → apply → GKE + platform  
+3. Verify https://debugpilot-gcp.manavmalavia.org  
+
+**Day-to-day:** application changes flow through Git → CI → Argo CD. Re-run Terraform only for infrastructure changes.
+
+### Deployment flow
+
+```
+Developer pushes to main
+        │
+        ▼
+GitHub Actions CI (test, lint, build image, push ECR + GAR, commit image tag)
+        │
+        ▼
+Argo CD syncs Helm chart → rolling update on cluster
+        │
+        ▼
+debugpilot-api (+ redis, consumer if enabled) running behind ingress
+```
 
 ### Terraform layout
 
 ```
 terraform/
 ├── aws/
-│   ├── bootstrap/          # ECR repository (long-lived)
-│   └── cluster/            # VPC, EKS, Helm: ingress, external-dns, cert-manager,
-│                           # monitoring, Argo CD, ingress YAML apply, Argo Application
+│   ├── bootstrap/     # ECR (long-lived)
+│   └── cluster/       # VPC, EKS, ingress, Argo CD, app ingress apply
 └── gcp/
-    ├── foundation/         # Artifact Registry, remote state bucket setup
-    └── main.tf             # Network, GKE, same Helm platform pattern
-```
-
-### Typical bring-up order
-
-**AWS**
-
-1. `Terraform AWS Foundation` → ECR  
-2. Merge to `main` → CI builds image and updates `values.yaml`  
-3. `Terraform AWS Cluster` → **apply** → EKS + platform + Argo CD Application  
-4. Verify DNS and `curl https://debugpilot.manavmalavia.org/health`
-
-**GCP** (optional second region/cloud)
-
-1. `Terraform GCP Foundation` → Artifact Registry + state  
-2. `Terraform GCP Cluster` → **apply** → GKE + platform  
-3. Verify https://debugpilot-gcp.manavmalavia.org  
-
-You can run **one cloud or both**; destroying AWS does not remove GCP DNS records (separate `txtOwnerId` and hostnames).
-
-### Greenfield after the rename (your flow)
-
-1. Merge this branch, then create **new** remote state buckets matching `terraform/*/backend.tf` (`debugpilot-terraform-state-…`).
-2. **AWS:** run `Terraform AWS Foundation` → apply (ECR `debugpilot-api`), then `Terraform AWS Cluster` → apply (new EKS cluster `debugpilot`).
-3. **GCP:** create the GCS state bucket (see `terraform/gcp/README.md`), run `Terraform GCP Foundation` → apply, run CI on `main` (updates `values-gcp.yaml` when GAR exists), then `Terraform GCP Cluster` → apply.
-4. Push to `main` so CI builds and tags `debugpilot-api` in both registries.
-5. Delete stale Cloudflare `jobradar*` records. Add GitHub repo webhooks once per Argo URL (see [Argo CD GitHub webhook](#argocd-github-webhook)).
-
----
-
-## Architecture
-
-### Application flow
-
-```mermaid
-flowchart LR
-  subgraph client [Client]
-    UI[React UI]
-  end
-  subgraph api [FastAPI]
-    Routes[REST + static dist]
-    Analyzer[analyzer.py]
-    Playbooks[incidents/*.md]
-    Cache[(Redis)]
-    AI[ai.py → Claude]
-    DB[(Postgres / SQLite)]
-  end
-  UI --> Routes
-  Routes --> Analyzer
-  Analyzer --> Playbooks
-  Analyzer --> Cache
-  Cache -->|miss| AI
-  AI --> Analyzer
-  Analyzer -->|save optional| DB
-```
-
-### Event-driven ingestion (GitHub Actions → History)
-
-```mermaid
-sequenceDiagram
-  participant GH as GitHub Actions
-  participant WH as POST /webhooks/github
-  participant K as Kafka incidents.raw
-  participant C as debugpilot-consumer
-  participant AI as Claude + playbooks
-  participant H as History UI
-
-  GH->>WH: workflow_run completed (failure)
-  WH->>WH: verify HMAC, fetch job logs
-  WH->>K: publish IncidentEvent
-  WH-->>GH: 202 accepted
-  K->>C: consume message
-  C->>C: resolve user by github_id
-  C->>AI: analyze_log()
-  AI->>H: saved incident + github_actions badge
-```
-
-### Multi-cloud traffic (simplified)
-
-```mermaid
-flowchart TB
-  subgraph users [Users]
-    U[Browser]
-  end
-  subgraph dns [Cloudflare DNS]
-    AWSrec[debugpilot.* records]
-    GCPrec[debugpilot-gcp.* records]
-  end
-  subgraph aws [AWS EKS]
-    AWSlb[NLB / ELB]
-    AWSing[ingress-nginx]
-    AWSpod[DebugPilot pod]
-  end
-  subgraph gcp [GCP GKE]
-    GCPlb[Cloud LB]
-    GCPing[ingress-nginx]
-    GCPpod[DebugPilot pod]
-  end
-  U --> AWSrec --> AWSlb --> AWSing --> AWSpod
-  U --> GCPrec --> GCPlb --> GCPing --> GCPpod
+    ├── foundation/    # Artifact Registry, remote state
+    └── main.tf        # Network, GKE, same platform pattern
 ```
 
 ---
 
-## How deployment works
+## DNS and external-dns
 
-```
-┌─────────────┐     push to main      ┌──────────────┐
-│  Developer  │ ───────────────────►  │  GitHub CI   │
-└─────────────┘                       │  test, build │
-                                      │  push ECR+GAR│
-                                      │  commit tag  │
-                                      └──────┬───────┘
-                                             │
-                    webhook (optional)       │  values.yaml
-                                             ▼
-                                      ┌──────────────┐
-                                      │   Argo CD    │
-                                      │  helm sync   │
-                                      └──────┬───────┘
-                                             ▼
-                                      ┌──────────────┐
-                                      │ debugpilot-api │
-                                      │ debugpilot-consumer │
-                                      │ redis · kafka  │
-                                      └──────────────┘
-```
+DNS is how users reach your cluster. Each cluster runs **external-dns**, which watches Kubernetes **Ingress** objects and creates matching records in **Cloudflare**.
 
-| Phase | Tool | What happens |
-|-------|------|----------------|
-| **Build** | GitHub Actions CI | pytest, ruff, frontend build, Docker buildx, push to ECR + GAR |
-| **Config git** | CI bot commit | Updates `charts/debugpilot/values.yaml` image digest on `main` |
-| **Sync** | Argo CD | Renders Helm chart → applies API, **Redis**, Service, HPA, ServiceMonitor |
-| **Platform** | Terraform (manual) | Cluster, ingress controller, external-dns, cert-manager, Argo CD install |
-| **Edge** | Cloudflare + external-dns | Hostname → load balancer IP/CNAME per cloud |
+| Cloud | Record type | Points to |
+|-------|-------------|-----------|
+| AWS | CNAME | ELB hostname from the Ingress |
+| GCP | A | Load balancer IP |
 
-**Day-to-day:** push application changes to `main` — CI and Argo CD handle the rest. Re-run Terraform only for infrastructure changes.
+Each cluster has its own `txtOwnerId` (`debugpilot-aws` vs `debugpilot-gcp`) so external-dns only manages its own records.
 
----
-
-## DNS, external-dns, and failover behavior
-
-DNS is the **edge** of the system: users hit Cloudflare hostnames that must point at the **current** cloud load balancer. This project uses **external-dns** in each cluster to reconcile Ingress hosts into Cloudflare.
-
-### How records are created
-
-1. **ingress-nginx** provisions a cloud load balancer (AWS ELB/NLB or GCP forwarding rule).
-2. **Ingress** resources in `k8s/ingress/aws/` or `k8s/ingress/gcp/` annotate desired hostnames:
-
-   ```yaml
-   external-dns.alpha.kubernetes.io/hostname: debugpilot.manavmalavia.org
-   external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
-   ```
-
-3. **external-dns** (Helm release in cluster) watches Ingress objects and creates/updates **CNAME** (AWS) or **A** (GCP) records in Cloudflare.
-4. **TXT records** (`cname-debugpilot...`) record ownership (`txtOwnerId`: `debugpilot-aws` vs `debugpilot-gcp`) so each cluster only manages its own records.
-
-### AWS vs GCP record shapes
-
-| Cloud | Typical record type | Points to |
-|-------|---------------------|-----------|
-| **AWS** | CNAME | `*.elb.amazonaws.com` hostname from Ingress status |
-| **GCP** | A | Static IP or LB IP for the GKE ingress |
-
-Always verify with:
+**After recreating a cluster**, old DNS records may still point at a deleted load balancer → 503 or NXDOMAIN. The destroy workflows delete Ingresses first and wait for external-dns to clean up. Manual recovery:
 
 ```bash
-# AWS — compare Ingress vs DNS
-kubectl get ingress debugpilot-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
-dig debugpilot.manavmalavia.org CNAME +short
-
-# GCP
-kubectl get ingress debugpilot-ingress -n default
-dig debugpilot-gcp.manavmalavia.org +short
-```
-
-### Failover and recreation scenarios
-
-“Failover” here means **recovering correct DNS after infrastructure changes** — not automatic multi-cloud active-active failover between AWS and GCP (those are **parallel stacks**, not hot standby).
-
-| Scenario | What goes wrong | What to do |
-|----------|-----------------|------------|
-| **EKS recreated** | New ELB hostname; Cloudflare still has **old** CNAME | Run destroy workflow (deletes Ingress first, waits for external-dns), or delete stale CNAMEs and restart external-dns |
-| **external-dns says “up to date” but DNS is wrong** | Records exist without matching TXT ownership from current cluster | Delete `debugpilot` / `debugpilot-grafana` / `debugpilot-argocd` CNAMEs + `cname-debugpilot*` TXT; restart external-dns deployment |
-| **503 / NXDOMAIN** | DNS not pointing at live LB, or cert still issuing | Fix DNS first; wait for cert-manager; confirm pods Ready |
-| **Destroy AWS, keep GCP** | AWS records should disappear; GCP `debugpilot-gcp*` unaffected | Confirm destroy workflow ran ingress cleanup; manually remove orphaned AWS records if needed |
-| **Both clouds up** | No conflict if hostnames stay prefixed (`debugpilot` vs `debugpilot-gcp`) | Do not reuse the same hostname across clusters |
-
-### Destroy-time DNS cleanup (AWS / GCP)
-
-**Terraform AWS Cluster → destroy** and **Terraform GCP Cluster → destroy** run:
-
-1. `kubectl delete -f k8s/ingress/{aws|gcp}/...` (app, Grafana, Argo CD ingresses)
-2. Wait ~90s for external-dns to **delete** Cloudflare records
-3. Detach the managed database (and VPC peering on GCP) from Terraform state — **data is kept**
-4. `terraform destroy` (cluster, Helm, IAM, etc.)
-5. **Stop** RDS / Cloud SQL to cut compute billing (~\$2/mo storage remains)
-
-On **apply**, CI starts a stopped database and re-imports retained resources before recreating the cluster.
-
-This prevents **stale CNAMEs** pointing at deleted load balancers after cluster teardown.
-
-### Manual DNS recovery checklist
-
-```bash
-# 1. Confirm load balancer exists
 kubectl get ingress -A
-
-# 2. Check external-dns
 kubectl logs -n external-dns deployment/external-dns --tail=50
-
-# 3. Compare DNS
 dig debugpilot.manavmalavia.org CNAME +short
-dig debugpilot-gcp.manavmalavia.org +short
-
-# 4. If stale — delete wrong records in Cloudflare, then:
-kubectl rollout restart deployment/external-dns -n external-dns
 ```
 
-Full playbook: [`app/incidents/external-dns-stale-cname.md`](app/incidents/external-dns-stale-cname.md)
-
----
-
-## Quick start (local)
-
-Run the full product on your laptop — **no Kubernetes required**.
-
-### Prerequisites
-
-| Tool | Version |
-|------|---------|
-| Python | 3.12+ |
-| Node.js | 22+ |
-| Anthropic API key | [console.anthropic.com](https://console.anthropic.com/) |
-| Redis (optional) | 7+ — caches repeat analyses; omit `REDIS_URL` to call Claude every time |
-
-### Steps
-
-```bash
-git clone https://github.com/manavmalavia18/JobTracker.git
-cd JobTracker
-cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY
-# Optional: REDIS_URL=redis://localhost:6379/0 (run Redis locally or use docker compose)
-
-chmod +x start.sh
-./start.sh
-```
-
-**With Redis (recommended for dev):** API + Redis in one command:
-
-```bash
-docker compose up --build
-```
-
-Uses `REDIS_URL=redis://redis:6379/0` from compose. UI still via `./start.sh` or http://localhost:8000 after building the frontend.
-
-- UI: http://localhost:5173  
-- API: http://localhost:8000  
-- Docs: http://localhost:8000/docs  
-
-Try a **sample log** in the UI, or:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Stop with `Ctrl+C` in the terminal running `start.sh`.
-
----
-
-## What an analysis returns
-
-- **Category** — kubernetes, terraform, github_actions, docker, app, unknown  
-- **Symptom**, **what failed**, **root cause**, **confidence**  
-- **Debug commands** — prefer read-only; destructive steps listed in **warnings**  
-- **Likely fix**, **prevention** tips  
-- Optional **save** to history (Postgres in cluster, SQLite locally)
-
-**Log uploads:** On AWS, files go to S3 (`debugpilot-log-uploads-<account_id>` from Terraform bootstrap). EKS node IAM allows `PutObject`/`GetObject`. Helm sets `UPLOADS_S3_BUCKET` in `values.yaml`. Locally, set `UPLOADS_LOCAL_DIR` when S3 is unset.
-
-**Caching:** If `REDIS_URL` is set, the same log text and `source_hint` returns the cached analysis (no Claude tokens). `POST /analyze` includes `cached` (boolean) and `duration_ms` so the UI and metrics can show Redis vs Claude. Prometheus counters: `debugpilot_analysis_cache_hits_total`, `debugpilot_analysis_cache_misses_total`. Cache key includes model and `ANALYSIS_CACHE_VERSION` — bump that env var when changing prompts or playbooks. Default TTL: 7 days (`REDIS_CACHE_TTL_SECONDS`).
-
-Playbooks under `app/incidents/` are retrieved with **semantic RAG** (fastembed + cosine similarity); only matches ≥70% (`RETRIEVAL_CONTEXT_MIN_SCORE`) are sent to Claude. Keyword fallback applies when embeddings are unavailable.
-
----
-
-## Project layout
-
-```
-├── app/
-│   ├── webhooks/github.py  # workflow_run → Kafka
-│   ├── consumer.py         # incidents.raw → analyze → DB
-│   └── events/             # schema, producer, user resolution
-├── frontend/               # React UI (History badges per ingestion source)
-├── charts/debugpilot/      # Helm — api, consumer, redis (values.yaml + values-gcp.yaml)
-├── k8s/kafka/              # Strimzi Kafka + topic CRs
-├── k8s/ingress/aws|gcp/    # Per-cloud Ingress + TLS
-├── terraform/aws|gcp/      # Multi-cloud IaC + Strimzi operator
-├── .github/workflows/      # CI, Deploy, Terraform, kafka-webhook-test
-├── tests/
-├── Dockerfile
-└── start.sh
-```
-
----
-
-## Local development
-
-| Mode | Command |
-|------|---------|
-| All-in-one script | `./start.sh` |
-| API + Redis (compose) | `docker compose up --build` |
-| API only | `uvicorn app.main:app --reload --port 8000` |
-| UI dev server | `cd frontend && npm run dev` |
-| Prod-like (UI from API) | `cd frontend && npm run build && uvicorn app.main:app --port 8000` |
-| Tests | `pytest tests/ -v` |
-| RAG eval (semantic) | `EVAL_INTEGRATION=1 pytest tests/test_eval_retrieval.py -v` |
-
-### Redis (local & Kubernetes)
-
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `REDIS_URL` | unset locally | e.g. `redis://localhost:6379/0` or `redis://redis:6379/0` in cluster |
-| `REDIS_CACHE_TTL_SECONDS` | `604800` (7 days) | How long cached analyses live |
-| `ANALYSIS_CACHE_VERSION` | `1` | Bump to invalidate cache after prompt/playbook changes |
-
-In **Kubernetes**, Helm deploys a `redis` Service (`charts/debugpilot/templates/redis.yaml`) when `redis.enabled: true`. The API uses cluster DNS `redis://redis:6379/0` — not `localhost` (see playbook `redis-localhost-k8s.md` for misconfigured *other* apps).
-
-Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:8000`). Production build uses **same-origin** `/analyze` (no localhost in the bundle).
+Playbook: [`app/incidents/external-dns-stale-cname.md`](app/incidents/external-dns-stale-cname.md)
 
 ---
 
@@ -542,134 +474,100 @@ Frontend dev uses `frontend/.env.development` (`VITE_API_URL=http://localhost:80
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/auth/config` | Whether GitHub login is required |
-| `GET` | `/auth/me` | Current user (session cookie) |
-| `GET` | `/auth/github/login` | Start GitHub OAuth |
-| `POST` | `/auth/logout` | Clear session |
-| `POST` | `/uploads` | Upload `.log` / `.txt` (max 512 KB); stores in S3 (AWS) or local dir; returns `log_text` + `upload_id` |
-| `POST` | `/analyze` | Analyze log text or `upload_id`; response adds `cached`, `duration_ms` (auth if OAuth configured) |
+| `GET` | `/auth/config` | Is GitHub login required? |
+| `GET` | `/auth/me` | Current user |
+| `GET` | `/auth/github/login` | Start OAuth |
+| `POST` | `/auth/logout` | End session |
+| `POST` | `/uploads` | Upload log file |
+| `POST` | `/analyze` | Analyze log text or prior upload |
+| `POST` | `/incidents/{id}/chat` | Follow-up questions |
+| `PATCH` | `/incidents/{id}` | Feedback, confirmed fix |
 | `GET` | `/incidents` | List saved analyses |
-| `GET` | `/incidents/{id}` | Get one analysis |
+| `GET` | `/incidents/{id}` | One incident + chat history |
+| `POST` | `/webhooks/github` | GitHub Actions failures (production) |
 | `GET` | `/metrics` | Prometheus metrics |
-| `POST` | `/webhooks/github` | GitHub `workflow_run` failures → Kafka (HMAC `X-Hub-Signature-256`) |
-| `GET` | `/docs` | OpenAPI |
+| `GET` | `/docs` | Interactive OpenAPI |
 
 ---
 
-## GitHub Actions
+## GitHub Actions and secrets
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| **CI** | Push / PR → `main`, or **Run workflow** | Test, ruff, Helm lint, build & push image, update `values.yaml` / `values-gcp.yaml` |
-| **Deploy** | Manual | Optional rollout / image patch (Argo CD–managed clusters) |
-| **Terraform AWS Foundation** | Manual | ECR |
-| **Terraform AWS Cluster** | Manual | plan / apply / destroy EKS |
-| **Terraform GCP Foundation** | Manual | Artifact Registry + state |
-| **Terraform GCP Cluster** | Manual | plan / apply / destroy GKE |
-| **Kafka Webhook Test** | Manual dispatch | Intentionally fails to validate webhook → Kafka → History (remove after validation) |
+### Workflows
 
-### Repository secrets (Terraform / CI)
+| Workflow | When | Purpose |
+|----------|------|---------|
+| **CI** | Push / PR to `main` | Tests, lint, build image, update Helm image tags |
+| **Deploy** | Manual | Optional rollout helper |
+| **Terraform AWS/GCP Foundation** | Manual | Registry + state setup |
+| **Terraform AWS/GCP Cluster** | Manual | plan / apply / destroy cluster |
 
-| Secret | Used by |
+### Important repository secrets
+
+| Secret | Purpose |
 |--------|---------|
-| `ARGOCD_GITHUB_WEBHOOK_SECRET` | Terraform AWS/GCP cluster apply — pins `webhook.github.secret` in Argo CD Helm so cluster rebuilds match the GitHub webhook |
-| `ANTHROPIC_API_KEY` | Terraform cluster apply (K8s secret), local `.env` |
-| `DEBUGPILOT_OAUTH_CLIENT_ID_AWS` | OAuth Client ID for AWS (`debugpilot.manavmalavia.org`) |
-| `DEBUGPILOT_OAUTH_CLIENT_SECRET_AWS` | OAuth client secret for AWS |
-| `DEBUGPILOT_OAUTH_CLIENT_ID_GCP` | OAuth Client ID for GCP (`debugpilot-gcp.manavmalavia.org`) |
-| `DEBUGPILOT_OAUTH_CLIENT_SECRET_GCP` | OAuth client secret for GCP |
-| `JWT_SECRET` | Session cookie signing — same value on both clouds (`openssl rand -hex 32`) |
-| `DEBUGPILOT_WEBHOOK_SECRET` | HMAC secret for `POST /webhooks/github` (cannot use `GITHUB_` prefix) |
-| `DEBUGPILOT_WEBHOOK_TOKEN` | GitHub PAT with `actions:read` — API fetches failed job logs |
+| `ANTHROPIC_API_KEY` | Claude — used in cluster secret and local `.env` |
+| `JWT_SECRET` | Signs session cookies (`openssl rand -hex 32`) |
+| `DEBUGPILOT_OAUTH_CLIENT_ID_*` / `DEBUGPILOT_OAUTH_CLIENT_SECRET_*` | GitHub OAuth per cloud (cannot use `GITHUB_` prefix) |
+| `ARGOCD_GITHUB_WEBHOOK_SECRET` | GitHub → Argo CD deploy webhook |
+| `DEBUGPILOT_WEBHOOK_SECRET` | HMAC for app workflow webhooks |
+| `DEBUGPILOT_WEBHOOK_TOKEN` | PAT with `actions:read` to fetch failed job logs |
 
-### GitHub sign-in (abuse protection)
+### GitHub sign-in (production)
 
-When `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set on the API (via `debugpilot-secrets`), `/analyze` and `/incidents` require a GitHub login. Sessions use an httpOnly cookie (7 days).
+Create a [GitHub OAuth App](https://github.com/settings/developers) per hostname:
 
-| Cloud | OAuth callback URL |
-|-------|-------------------|
-| **AWS** | `https://debugpilot.manavmalavia.org/auth/github/callback` |
-| **GCP** | `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` |
+| Cloud | Callback URL |
+|-------|----------------|
+| AWS | `https://debugpilot.manavmalavia.org/auth/github/callback` |
+| GCP | `https://debugpilot-gcp.manavmalavia.org/auth/github/callback` |
 
-Repo secret names cannot start with `GITHUB` (reserved). Use `DEBUGPILOT_OAUTH_*` above.
+Apply via Terraform cluster workflow or patch `debugpilot-secrets` in the cluster.
 
-1. Create a [GitHub OAuth App](https://github.com/settings/developers) per hostname (**OAuth App**, device flow off).
-2. Add the `DEBUGPILOT_OAUTH_*` secrets and `JWT_SECRET`, then run **Terraform GCP/AWS Cluster → apply**.
-3. Or patch the cluster secret manually:
+### Argo CD webhook (faster deploys)
 
-   ```bash
-   kubectl -n default patch secret debugpilot-secrets --type merge -p '{
-     "stringData": {
-       "GITHUB_CLIENT_ID": "your-client-id",
-       "GITHUB_CLIENT_SECRET": "your-client-secret",
-       "JWT_SECRET": "your-openssl-hex-secret"
-     }
-   }'
-   ```
-
-4. Redeploy / restart API pods. `values-gcp.yaml` sets `publicBaseUrl` and `authCookieSecure: true`.
-
-Local dev without OAuth: leave `GITHUB_CLIENT_ID` unset — API uses a built-in `dev` user (`AUTH_DISABLED` behavior). Set `AUTH_DISABLED=1` to force that mode even if OAuth env vars exist.
-
-### Argo CD GitHub webhook
-
-Terraform sets `configs.secret.githubSecret` when `ARGOCD_GITHUB_WEBHOOK_SECRET` (or `TF_VAR_argocd_github_webhook_secret` locally) is set. Use the **same** value you configured in GitHub.
-
-| Cloud | Webhook payload URL |
-|-------|---------------------|
+| Cloud | Payload URL |
+|-------|----------------|
 | GCP | `https://debugpilot-gcp-argocd.manavmalavia.org/api/webhook` |
 | AWS | `https://debugpilot-argocd.manavmalavia.org/api/webhook` |
 
-**One-time per URL:** create the webhook in GitHub (push events, shared secret). After cluster destroy/recreate, run Terraform apply only — no `kubectl patch` if the secret and URL are unchanged.
-
-Local apply:
-
-```bash
-export TF_VAR_argocd_github_webhook_secret='your-existing-secret'
-```
-
 ---
 
-## Operational runbooks
+## Operational playbooks
 
-Markdown guides in `app/incidents/`:
+Real incident write-ups used by RAG — also readable as standalone runbooks:
 
-| Playbook | Topic |
-|----------|--------|
-| `external-dns-stale-cname.md` | DNS drift after cluster recreate |
-| `ingress-503.md` | Ingress up, backend unhealthy |
-| `image-pull-backoff.md` | ECR/GAR image mismatch |
-| `cert-manager-tls.md` | TLS / ACME issues |
-| `terraform-state-lock.md` | State lock during apply |
-| `redis-localhost-k8s.md` | Redis URL in K8s |
-| `github-actions-kubeconfig.md` | CI cluster access |
+| File | Topic |
+|------|--------|
+| `external-dns-stale-cname.md` | DNS wrong after cluster recreate |
+| `ingress-503.md` | Ingress up, backends unhealthy |
+| `image-pull-backoff.md` | Container image pull failures |
+| `cert-manager-tls.md` | TLS / certificate issues |
+| `terraform-state-lock.md` | Stuck Terraform state |
+| `redis-localhost-k8s.md` | Wrong Redis URL inside Kubernetes |
+| `github-actions-kubeconfig.md` | CI access to clusters |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Pointer |
-|---------|----------------|---------|
-| `Could not resolve host` | Stale Cloudflare CNAME | [DNS section](#-dns-external-dns-and-failover-behavior) |
-| **503** from nginx | No ready endpoints | `kubectl get pods -l app=debugpilot-api` |
-| Argo CD **OutOfSync** | Git vs cluster drift | Sync in UI; check repo path |
-| CORS / localhost from live site | Old frontend bundle | Use current `main` (same-origin API) |
-| GCP works, AWS doesn’t | Separate hostnames / records | Verify `debugpilot` vs `debugpilot-gcp` records independently |
-| Every analyze hits Claude | Redis missing or wrong URL | `kubectl get pods -l app=redis`; confirm `REDIS_URL=redis://redis:6379/0` on API deployment |
-| Webhook 200 ignored | Run succeeded or wrong event type | Only `workflow_run` + `conclusion=failure` are queued |
-| Incident in DB but not in UI | Wrong GitHub user mapping | Log in with the account that triggered the workflow |
-| Re-run didn't create row | Same `run_id` deduped | Needs `run_attempt` in external_id (see [Why Kafka](#-why-we-added-kafka-the-honest-version)) |
-| Consumer silent | Kafka not ready or env missing | `kubectl -n kafka get kafka`; check `KAFKA_BOOTSTRAP_SERVERS` on API + consumer |
+| Symptom | Likely cause | What to check |
+|---------|----------------|---------------|
+| UI can't reach API | Wrong URL or API down | `/health`, ingress, pods |
+| Analyze always slow | Cache miss every time | `REDIS_URL` set? Redis pod running? |
+| 401 on analyze | Auth enabled, not logged in | GitHub OAuth config |
+| Incident not in History | Different GitHub account | Log in with the account that owns the workflow |
+| `Could not resolve host` | Stale DNS | [DNS section](#dns-and-external-dns) |
+| 503 from nginx | No ready API pods | `kubectl get pods -l app=debugpilot-api` |
+| Argo OutOfSync | Git vs cluster drift | Sync in Argo UI |
 
 ---
 
 ## Author
 
-**Manav Malavia** — [manavmalavia.org](https://manavmalavia.org) · [GitHub](https://github.com/manavmalavia18/JobTracker)
+**Manav Malavia** — [manavmalavia.org](https://manavmalavia.org) · [GitHub](https://github.com/manavmalavia18/DebugPilot)
 
 ---
 
 <p align="center">
-  <sub>FastAPI · React · Claude · Kafka · Strimzi · Terraform · AWS EKS · GCP GKE · Helm · Argo CD</sub><br/>
-  <sub><em>Built by someone who got tired of pasting their own CI logs.</em></sub>
+  <sub>FastAPI · React · Claude · Redis · Postgres · Kubernetes · Terraform · Helm · Argo CD</sub>
 </p>
