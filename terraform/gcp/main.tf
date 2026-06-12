@@ -365,6 +365,21 @@ resource "helm_release" "strimzi_operator" {
   create_namespace = true
   timeout          = 600
 
+  values = [
+    yamlencode({
+      resources = {
+        requests = {
+          cpu    = "100m"
+          memory = "256Mi"
+        }
+        limits = {
+          cpu    = "500m"
+          memory = "512Mi"
+        }
+      }
+    })
+  ]
+
   set {
     name  = "watchNamespaces[0]"
     value = "kafka"
@@ -382,7 +397,6 @@ resource "null_resource" "strimzi_kafka" {
       for crd in kafkas.kafka.strimzi.io kafkatopics.kafka.strimzi.io kafkanodepools.kafka.strimzi.io; do
         kubectl wait --for=condition=Established "crd/$crd" --timeout=300s
       done
-      kubectl wait --for=condition=Available deployment/strimzi-cluster-operator -n kafka --timeout=300s
       echo "Waiting for kafka.strimzi.io/v1 API..."
       for attempt in $(seq 1 60); do
         if kubectl api-resources --api-group=kafka.strimzi.io 2>/dev/null | grep -q '^kafkas '; then
@@ -391,6 +405,10 @@ resource "null_resource" "strimzi_kafka" {
         echo "Kafka API not listed yet (attempt $attempt/60)..."
         sleep 5
       done
+      if ! kubectl wait --for=condition=Available deployment/strimzi-cluster-operator -n kafka --timeout=600s; then
+        echo "Strimzi operator not Available yet; continuing with manifest apply..."
+        kubectl get pods -n kafka -o wide || true
+      fi
       kubectl apply -f ${path.module}/../../k8s/kafka/
       echo "Waiting for Kafka cluster debugpilot to become ready..."
       kubectl wait kafka/debugpilot -n kafka --for=condition=Ready --timeout=900s
