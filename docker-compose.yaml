@@ -1,4 +1,31 @@
 services:
+  # Kafka-protocol compatible broker for local dev; production uses Apache Kafka via Strimzi.
+  redpanda:
+    image: redpandadata/redpanda:v24.2.4
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports:
@@ -17,8 +44,12 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_TOPIC_INCIDENTS: incidents.raw
     depends_on:
       redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
     volumes:
       - ./app:/app/app

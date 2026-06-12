@@ -6,7 +6,7 @@ from typing import List
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlmodel import Session, select
@@ -56,6 +56,7 @@ from app.storage import (
     storage_backend,
     validate_upload,
 )
+from app.webhooks.github import handle_workflow_run_webhook, verify_github_signature
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -88,6 +89,7 @@ def _saved_incident_read(row: SavedIncident) -> SavedIncidentRead:
         source_filename=row.source_filename,
         resolution=row.resolution,
         feedback=_feedback_from_db(row.feedback),
+        ingestion_source=row.ingestion_source or "manual",
     )
 
 
@@ -152,6 +154,26 @@ def health():
         "auth_enabled": auth_enabled(),
         "uploads_backend": storage_backend(),
     }
+
+
+@app.post("/webhooks/github")
+async def github_webhook(request: Request):
+    payload = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_github_signature(payload, signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    event_type = request.headers.get("X-GitHub-Event", "")
+    if event_type != "workflow_run":
+        return JSONResponse({"status": "ignored", "event": event_type})
+
+    try:
+        body = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+
+    status_code, message = handle_workflow_run_webhook(body)
+    return JSONResponse({"status": message}, status_code=status_code)
 
 
 @app.get("/auth/config")
@@ -307,6 +329,7 @@ def analyze(
             likely_fix=result.likely_fix,
             confidence=result.confidence,
             response_json=json.dumps(result.model_dump()),
+            ingestion_source="manual",
         )
         session.add(saved)
         session.commit()

@@ -130,3 +130,17 @@ variable "api_image_tag" {
   default     = "latest"
   description = "Artifact Registry tag for debugpilot-api (override after CI push)"
 }
+
+variable "github_webhook_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "HMAC secret for POST /webhooks/github (TF_VAR_github_webhook_secret)"
+}
+
+variable "github_webhook_token" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub PAT with actions:read for fetching workflow logs"
+}

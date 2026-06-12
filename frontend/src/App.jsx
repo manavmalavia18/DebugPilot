@@ -97,6 +97,12 @@ export default function App() {
     }
   }, [user, loadHistory])
 
+  useEffect(() => {
+    if (!user || view !== "history") return undefined
+    const interval = setInterval(loadHistory, 30000)
+    return () => clearInterval(interval)
+  }, [user, view, loadHistory])
+
   const analyze = async () => {
     if (!logText.trim() && !uploadId) return
     setLoading(true)

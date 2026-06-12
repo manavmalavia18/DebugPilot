@@ -40,6 +40,14 @@ def _ensure_saved_incident_columns() -> None:
         statements.append("ALTER TABLE savedincident ADD COLUMN resolution VARCHAR(2000)")
     if "feedback" not in columns:
         statements.append("ALTER TABLE savedincident ADD COLUMN feedback INTEGER")
+    if "ingestion_source" not in columns:
+        statements.append(
+            "ALTER TABLE savedincident ADD COLUMN ingestion_source VARCHAR(32) DEFAULT 'manual'"
+        )
+    if "external_id" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN external_id VARCHAR(255)")
+    if "event_metadata_json" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN event_metadata_json TEXT")
     if not statements:
         return
     with engine.begin() as connection:

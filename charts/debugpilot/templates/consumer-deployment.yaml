@@ -1,38 +1,23 @@
+{{- if .Values.consumer.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: debugpilot-api
+  name: debugpilot-consumer
 spec:
-  {{- if not .Values.api.hpa.enabled }}
-  replicas: {{ .Values.api.replicas }}
-  {{- end }}
-  {{- if and .Values.api.hpa.enabled (eq (int .Values.api.hpa.maxReplicas) 1) }}
-  strategy:
-    type: Recreate
-  {{- end }}
+  replicas: {{ .Values.consumer.replicas }}
   selector:
     matchLabels:
-      app: debugpilot-api
+      app: debugpilot-consumer
   template:
     metadata:
       labels:
-        app: debugpilot-api
+        app: debugpilot-consumer
     spec:
-      {{- if .Values.api.uploadsS3Bucket }}
-      serviceAccountName: debugpilot-api
-      {{- end }}
-      {{- if .Values.api.persistence.enabled }}
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: debugpilot-api-data
-      {{- end }}
       containers:
-        - name: debugpilot-api
+        - name: debugpilot-consumer
           image: {{ .Values.api.image }}
           imagePullPolicy: {{ .Values.api.imagePullPolicy }}
-          ports:
-            - containerPort: {{ .Values.api.port }}
+          command: {{ toJson .Values.consumer.command }}
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -43,13 +28,19 @@ spec:
             - name: REDIS_URL
               value: {{ .Values.api.redisUrl | quote }}
             {{- end }}
-            {{- if .Values.api.publicBaseUrl }}
-            - name: PUBLIC_BASE_URL
-              value: {{ .Values.api.publicBaseUrl | quote }}
+            {{- if .Values.kafka.bootstrapServers }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
             {{- end }}
-            {{- if .Values.api.authCookieSecure }}
-            - name: AUTH_COOKIE_SECURE
-              value: "true"
+            - name: KAFKA_TOPIC_INCIDENTS
+              value: {{ .Values.kafka.topicIncidents | quote }}
+            - name: KAFKA_TOPIC_DLQ
+              value: {{ .Values.kafka.topicDlq | quote }}
+            - name: KAFKA_CONSUMER_GROUP
+              value: {{ .Values.consumer.groupId | quote }}
+            {{- if .Values.consumer.systemGithubId }}
+            - name: DEBUGPILOT_SYSTEM_GITHUB_ID
+              value: {{ .Values.consumer.systemGithubId | quote }}
             {{- end }}
             - name: GITHUB_CLIENT_ID
               valueFrom:
@@ -75,22 +66,6 @@ spec:
                   name: {{ .Values.api.anthropicSecretName }}
                   key: DATABASE_URL
                   optional: true
-            {{- if .Values.api.uploadsS3Bucket }}
-            - name: UPLOADS_S3_BUCKET
-              value: {{ .Values.api.uploadsS3Bucket | quote }}
-            - name: AWS_REGION
-              value: {{ .Values.api.awsRegion | default "us-east-1" | quote }}
-            {{- end }}
-            {{- if .Values.api.persistence.enabled }}
-            - name: DATABASE_PATH
-              value: {{ .Values.api.persistence.databasePath | quote }}
-            {{- end }}
-            {{- if .Values.kafka.bootstrapServers }}
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: {{ .Values.kafka.bootstrapServers | quote }}
-            {{- end }}
-            - name: KAFKA_TOPIC_INCIDENTS
-              value: {{ .Values.kafka.topicIncidents | quote }}
             - name: GITHUB_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
@@ -103,15 +78,11 @@ spec:
                   name: {{ .Values.api.anthropicSecretName }}
                   key: GITHUB_WEBHOOK_TOKEN
                   optional: true
-          {{- if .Values.api.persistence.enabled }}
-          volumeMounts:
-            - name: data
-              mountPath: {{ .Values.api.persistence.mountPath }}
-          {{- end }}
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 768Mi
+{{- end }}

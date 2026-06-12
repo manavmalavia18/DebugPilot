@@ -118,3 +118,17 @@ variable "argocd_github_webhook_secret" {
   default     = ""
   description = "GitHub webhook HMAC secret (webhook.github.secret). Set via TF_VAR_argocd_github_webhook_secret or ARGOCD_GITHUB_WEBHOOK_SECRET in CI."
 }
+
+variable "github_webhook_secret" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "HMAC secret for POST /webhooks/github (TF_VAR_github_webhook_secret)"
+}
+
+variable "github_webhook_token" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "GitHub PAT with actions:read for fetching workflow logs"
+}

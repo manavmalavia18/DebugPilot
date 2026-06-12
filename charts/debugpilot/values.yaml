@@ -31,3 +31,18 @@ api:
   awsRegion: us-east-1
   persistence:
     enabled: false
+
+kafka:
+  bootstrapServers: ""
+  topicIncidents: incidents.raw
+  topicDlq: incidents.dlq
+
+consumer:
+  enabled: false
+  replicas: 1
+  groupId: debugpilot-incidents
+  systemGithubId: ""
+  command:
+    - python
+    - -m
+    - app.consumer
