@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "charts/debugpilot/values.yaml"
+      - "charts/debugpilot/values-aws.yaml"
       - "charts/debugpilot/values-gcp.yaml"
   pull_request:
     branches: [main]
@@ -159,7 +160,8 @@ jobs:
         run: |
           ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}"
           sed -i "\|amazonaws.com/debugpilot-api|s|image:.*|image: ${ECR_IMAGE}|" charts/debugpilot/values.yaml
-          git add charts/debugpilot/values.yaml
+          sed -i "\|amazonaws.com/debugpilot-api|s|image:.*|image: ${ECR_IMAGE}|" charts/debugpilot/values-aws.yaml
+          git add charts/debugpilot/values.yaml charts/debugpilot/values-aws.yaml
 
           if [ "${{ steps.image_targets.outputs.gar_push }}" = "true" ]; then
             GAR_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/debugpilot/debugpilot-api:${{ github.sha }}"
@@ -186,8 +188,8 @@ jobs:
           echo "  ECR: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/debugpilot-api:${{ github.sha }}"
           if [ "${{ steps.image_targets.outputs.gar_push }}" = "true" ]; then
             echo "  GAR: ${{ steps.image_targets.outputs.gar_image }}"
-            echo "  Helm: values.yaml + values-gcp.yaml updated to ${{ github.sha }}"
+            echo "  Helm: values.yaml + values-aws.yaml + values-gcp.yaml updated to ${{ github.sha }}"
           else
             echo "  GAR: skipped (values-gcp.yaml unchanged)"
-            echo "  Helm: values.yaml updated to ${{ github.sha }}"
+            echo "  Helm: values.yaml + values-aws.yaml updated to ${{ github.sha }}"
           fi

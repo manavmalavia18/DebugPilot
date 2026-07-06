@@ -271,12 +271,42 @@ resource "null_resource" "debugpilot_ingress" {
     command = <<-EOT
       set -euo pipefail
 
-      echo "Waiting for Argo CD to deploy debugpilot-api..."
+      dump_debugpilot_diagnostics() {
+        echo "=== Argo CD Application ==="
+        kubectl get application debugpilot -n argocd -o wide 2>/dev/null || true
+        kubectl describe application debugpilot -n argocd 2>/dev/null || true
+        echo "=== Workloads in default ==="
+        kubectl get deploy,pods,events -n default --sort-by='.lastTimestamp' 2>/dev/null | tail -40 || true
+        echo "=== debugpilot-api pods ==="
+        kubectl describe pods -n default -l app=debugpilot-api 2>/dev/null || true
+      }
+
+      echo "Waiting for Argo CD to sync debugpilot Application..."
+      for i in $(seq 1 90); do
+        SYNC_STATUS=$(kubectl get application debugpilot -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "")
+        if [ "$SYNC_STATUS" = "Synced" ]; then
+          echo "Argo CD Application is Synced."
+          break
+        fi
+        echo "  sync status: $${SYNC_STATUS:-pending} ($i/90)"
+        sleep 10
+      done
+      if [ "$(kubectl get application debugpilot -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "")" != "Synced" ]; then
+        echo "Argo CD never reached Synced state."
+        dump_debugpilot_diagnostics
+        exit 1
+      fi
+
+      echo "Waiting for debugpilot-api Deployment to become available..."
       for i in $(seq 1 60); do
         kubectl get deployment debugpilot-api -n default >/dev/null 2>&1 && break
         sleep 10
       done
-      kubectl wait --for=condition=available deployment/debugpilot-api -n default --timeout=600s
+      if ! kubectl wait --for=condition=available deployment/debugpilot-api -n default --timeout=600s; then
+        echo "debugpilot-api Deployment did not become available."
+        dump_debugpilot_diagnostics
+        exit 1
+      fi
 
       kubectl apply -f ${path.module}/../../k8s/ingress/gcp/debugpilot-ingress.yaml
     EOT
