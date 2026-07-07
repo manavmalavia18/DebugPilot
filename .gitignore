@@ -235,3 +235,11 @@ terraform/**/terraform.tfstate.backup
 terraform/**/terraform.tfstate.*.backup
 terraform/**/.terraform.lock.hcl
 terraform/**/terraform.tfvars
+.DS_Store
+**/.DS_Store
+
+# Local interview / study notes (not product docs)
+docs/K8S_NOTES.md
+docs/sitewire-architecture-presentation.md
+docs/presentation-prep.md
+docs/presentation-prep.pdf

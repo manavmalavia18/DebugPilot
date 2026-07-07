@@ -29,6 +29,7 @@
 - [Architecture](#architecture)
 - [What's in this repository](#whats-in-this-repository)
 - [Tech stack](#tech-stack)
+- [Why this tech stack?](#why-this-tech-stack)
 - [Getting started locally](#getting-started-locally)
 - [What an analysis returns](#what-an-analysis-returns)
 - [Running in production (multi-cloud)](#running-in-production-multi-cloud)
@@ -312,6 +313,69 @@ jobradar/   (repo name; product is DebugPilot)
 | IaC | Terraform | VPC, cluster, platform Helm releases |
 | Registry | ECR (AWS) / Artifact Registry (GCP) | Stores `debugpilot-api` images |
 | Events (optional) | Kafka via Strimzi | Queue for webhook-driven incidents |
+
+---
+
+## Why this tech stack?
+
+The tables above list *what* is used. This section explains *why* — useful if you're reviewing the architecture or wondering whether simpler tools would have been enough.
+
+### Application layer
+
+| Choice | Why |
+|--------|-----|
+| **FastAPI** | Async-friendly Python, automatic OpenAPI docs (`/docs`), and a small surface area for REST + webhooks. Fits a solo backend without framework ceremony. |
+| **React + Vite** | Fast local dev, simple static build baked into the Docker image for production. Tailwind keeps the ops-style UI consistent without a heavy component library. |
+| **Claude (API)** | Strong on long, messy technical logs (stack traces, kubectl output). Structured JSON via prompting — no separate parsing model. Pay-per-call fits a solo budget when paired with Redis caching; no GPU infra to operate. |
+| **Postgres (prod) / SQLite (local)** | Relational data for users, saved incidents, and chat history. SQLite keeps local setup zero-config; Postgres is the durable choice behind EKS/GKE. |
+| **Redis** | Hot cache for repeat analyses — identical log + source returns instantly without another Claude call. Shared across API replicas; survives the mental model of "cache is ephemeral." **Not** used as the job queue — cache TTL/eviction should not affect message durability. |
+| **fastembed (in-process RAG)** | ~7 playbooks today; embedding the library takes milliseconds with no extra service. Pinecone/pgvector would add cost and another failure point at this scale. Clear migration path if the library grows to thousands of documents. |
+| **GitHub OAuth + JWT cookies** | No password storage. Natural identity for a DevOps tool and aligns with the same GitHub account that triggers workflow webhooks. `httpOnly` cookies reduce XSS token theft vs. storing tokens in `localStorage`. |
+
+### Platform layer
+
+| Choice | Why |
+|--------|-----|
+| **Kubernetes (EKS + GKE)** | Same Helm chart on two clouds proves portability — not a demo locked to one vendor. Separate hostnames and `txtOwnerId` per cluster so DNS records don't fight in one Cloudflare zone. |
+| **Helm** | One chart deploys API, Redis, consumer, HPA, and ServiceMonitor. Cloud-specific image URLs and hostnames live in `values-aws.yaml` / `values-gcp.yaml`. |
+| **Argo CD (GitOps)** | Cluster state follows Git `main`. CI updates the image tag in values; Argo rolls out — no `kubectl apply` from laptops or long-lived CI cluster credentials for day-to-day deploys. |
+| **Terraform (foundation + cluster split)** | Foundation (ECR, Artifact Registry, remote state) survives cluster destroy/recreate. Cluster stack owns VPC, ingress, cert-manager, external-dns, and monitoring — disposable without losing images or state backend. |
+| **ingress-nginx + cert-manager + external-dns** | Standard K8s edge pattern: HTTPS termination, Let's Encrypt certs, and DNS records derived from Ingress hostnames — no manual Cloudflare edits per deploy. |
+| **kube-prometheus-stack** | Request/cache metrics at `/metrics` plus cluster dashboards without building observability from scratch. |
+
+### Why Kafka?
+
+Kafka appears in the stack only for **automatic GitHub Actions ingestion** — not for manual paste/upload, which hits the API directly. Local dev works without Kafka.
+
+**The problem:** GitHub webhooks must return **fast** (within a few seconds). A failed workflow analysis needs to fetch job logs from the GitHub API, run RAG + Claude, and write to Postgres — often **10+ seconds**. Doing that synchronously in the webhook handler risks timeouts and duplicate work on GitHub retries.
+
+**What Kafka buys you:**
+
+```
+GitHub workflow fails
+  → POST /webhooks/github (verify HMAC, enqueue, return 200)
+  → Kafka topic incidents.raw
+  → debugpilot-consumer fetches logs → analyze → save to History
+  → poison messages → incidents.dlq after retries
+```
+
+| Alternative | Why it wasn't the primary choice |
+|-------------|----------------------------------|
+| Sync analyze in webhook | GitHub timeout; slow response; retries duplicate expensive Claude calls |
+| Background thread in API pod | Lost on restart; can't scale workers independently; mixes HTTP and batch concerns |
+| Celery + Redis as broker | Redis already caches analyses — mixing cache and queue roles is messy |
+| AWS SQS / GCP Pub/Sub | Cloud-specific; wanted one event pattern portable across both environments |
+| **Kafka + Strimzi** | Durable log, consumer groups, replay, and a dead-letter queue — standard event-driven ops pattern |
+
+**Honest tradeoff:** At current volume, Kafka + Strimzi is **heavier than necessary**. SQS, Redis Streams, or an in-process queue would be simpler for a small solo project. Kafka is here to **decouple webhook receipt from analysis**, demonstrate production-grade async ingestion, and keep the consumer scalable separately from the API. If volume stayed low permanently, a lighter queue would be the pragmatic cut.
+
+### Other notable choices
+
+| Choice | Why |
+|--------|-----|
+| **Strimzi on K8s** | Runs Kafka as a Kubernetes operator — same GitOps/Terraform workflow as the app. Local dev uses Redpanda in `docker-compose` (Kafka-compatible, lighter than full Strimzi). |
+| **S3 uploads (AWS only)** | Standard object store on EKS; IRSA gives the API pod IAM access without static keys. GCP uploads can follow the same pattern later — incremental scope. |
+| **pytest + ruff in CI** | Fast feedback on retrieval quality (`tests/test_eval_retrieval.py`) and API behavior before images ship. |
 
 ---
 
