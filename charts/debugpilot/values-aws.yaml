@@ -2,7 +2,7 @@ redis:
   enabled: true
 
 api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:8a5ff126aca8f3f30ec3821ab7fb46c5e5f7e9a7
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:63df42c4fd67ab38ffac43f1bfab0cd5fd7a6111
   replicas: 1
   hpa:
     enabled: true
