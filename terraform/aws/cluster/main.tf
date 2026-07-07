@@ -420,7 +420,7 @@ resource "null_resource" "argocd_app" {
       spec:
         project: default
         source:
-          repoURL: https://github.com/manavmalavia18/JobTracker
+          repoURL: https://github.com/manavmalavia18/DebugPilot
           targetRevision: HEAD
           path: charts/debugpilot
           helm:
