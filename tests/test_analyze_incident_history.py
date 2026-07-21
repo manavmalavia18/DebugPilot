@@ -83,3 +83,9 @@ def test_analyze_returns_incident_history_matches(mock_analyze):
     assert match["symptom"] == "Redis unreachable"
     assert match["method"] == "keyword"
     assert match["score"] > 0
+
+    # Claude path must receive non-empty history context when matches exist.
+    kwargs = mock_analyze.call_args.kwargs
+    assert kwargs["incident_history_context"]
+    assert "Past incident #1" in kwargs["incident_history_context"]
+    assert "Redis unreachable" in kwargs["incident_history_context"]

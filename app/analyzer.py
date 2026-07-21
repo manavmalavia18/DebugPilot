@@ -3,7 +3,12 @@ import json
 from prometheus_client import Counter
 
 from app.ai import analyze_with_claude
-from app.cache import cache_key, get_cached_analysis, set_cached_analysis
+from app.cache import (
+    cache_key,
+    get_cached_analysis,
+    history_fingerprint,
+    set_cached_analysis,
+)
 from app.models import AnalysisResult, PlaybookMatch, SourceCategory
 from app.retrieval import find_relevant_playbooks, playbooks_for_llm_context
 
@@ -66,7 +71,14 @@ def analyze_log(
     user_id: int | None = None,
     incident_history_context: str = "",
 ) -> tuple[AnalysisResult, bool]:
-    key = cache_key(log_text, source_hint, user_id=user_id)
+    # Include history in the cache key so a new confirmed fix / similar past
+    # incident cannot serve a stale Claude answer for the same log text.
+    key = cache_key(
+        log_text,
+        source_hint,
+        user_id=user_id,
+        history_fingerprint=history_fingerprint(incident_history_context),
+    )
     cached_payload = get_cached_analysis(key)
     if cached_payload is not None:
         analysis_cache_hits.inc()

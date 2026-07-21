@@ -45,6 +45,8 @@ export default function AnalyzePanel({
   error,
   result,
   incidentId,
+  saveToHistory = true,
+  setSaveToHistory,
   onAnalyze,
   onLoadPreset,
   onUploadFile,
@@ -183,6 +185,19 @@ export default function AnalyzePanel({
               className="h-full min-h-[120px] w-full resize-none border border-border bg-black py-2 pl-10 pr-3 font-mono text-[12px] leading-5 text-neutral-200 outline-none focus:border-accent"
             />
           </div>
+
+          <label className="mt-2 flex shrink-0 cursor-pointer items-center gap-2 font-mono text-[11px] text-muted">
+            <input
+              type="checkbox"
+              checked={saveToHistory}
+              onChange={(e) => setSaveToHistory?.(e.target.checked)}
+              className="accent-accent"
+            />
+            Save to history
+            <span className="text-neutral-600">
+              (off = Redis cache can hit on re-analyze)
+            </span>
+          </label>
 
           <button
             type="button"

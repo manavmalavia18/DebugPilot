@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 from dataclasses import dataclass
@@ -19,6 +20,14 @@ INCIDENT_RETRIEVAL_LIMIT = int(os.getenv("INCIDENT_RETRIEVAL_LIMIT", "3"))
 INCIDENT_DISPLAY_LIMIT = int(os.getenv("INCIDENT_DISPLAY_LIMIT", "2"))
 MIN_KEYWORD_OVERLAP = int(os.getenv("INCIDENT_KEYWORD_MIN_OVERLAP", "4"))
 
+# Soft ranking boosts — prefer incidents the user confirmed or marked helpful.
+RESOLUTION_BOOST = float(os.getenv("INCIDENT_RESOLUTION_BOOST", "0.05"))
+FEEDBACK_UP_BOOST = float(os.getenv("INCIDENT_FEEDBACK_UP_BOOST", "0.03"))
+
+# In-process memo for incident embeddings (id + content hash → vector).
+_EMBED_CACHE_MAX = int(os.getenv("INCIDENT_EMBED_CACHE_MAX", "200"))
+_incident_embed_cache: dict[tuple[int, str], list[float]] = {}
+
 
 @dataclass(frozen=True)
 class IncidentHistoryMatch:
@@ -27,6 +36,10 @@ class IncidentHistoryMatch:
     score: float
     method: str  # "semantic" | "keyword"
     symptom: str = ""
+
+
+def clear_incident_embed_cache() -> None:
+    _incident_embed_cache.clear()
 
 
 def _incident_content(row: SavedIncident) -> str:
@@ -58,6 +71,37 @@ def _incident_embed_text(row: SavedIncident) -> str:
     )
 
 
+def _cached_incident_embed(row: SavedIncident) -> list[float]:
+    """Embed incident text with a small process-local cache."""
+    text = _incident_embed_text(row)
+    content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+    cache_key = (row.id or 0, content_hash)
+    cached = _incident_embed_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    vector = _embed_text(text)
+    if row.id is not None and vector:
+        if len(_incident_embed_cache) >= _EMBED_CACHE_MAX:
+            # Drop an arbitrary oldest-ish entry (dict preserves insertion order).
+            _incident_embed_cache.pop(next(iter(_incident_embed_cache)))
+        _incident_embed_cache[cache_key] = vector
+    return vector
+
+
+def _quality_boost(row: SavedIncident) -> float:
+    boost = 0.0
+    if row.resolution and row.resolution.strip():
+        boost += RESOLUTION_BOOST
+    if row.feedback == 1:
+        boost += FEEDBACK_UP_BOOST
+    return boost
+
+
+def _apply_quality_boost(score: float, row: SavedIncident) -> float:
+    return min(1.0, round(score + _quality_boost(row), 3))
+
+
 def _token_set(text: str) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9][a-z0-9._/-]{2,}", text.lower())}
 
@@ -78,26 +122,32 @@ def _keyword_incident_matches(
     if not haystack:
         return []
 
-    scored: list[tuple[int, SavedIncident]] = []
+    scored: list[tuple[float, SavedIncident]] = []
+    raw_overlaps: list[tuple[int, SavedIncident]] = []
     for row in rows:
         overlap = len(haystack & _token_set(_incident_search_corpus(row)))
         if overlap >= MIN_KEYWORD_OVERLAP:
-            scored.append((overlap, row))
+            raw_overlaps.append((overlap, row))
 
-    scored.sort(key=lambda item: item[0], reverse=True)
-    if not scored:
+    if not raw_overlaps:
         return []
 
-    top_score = scored[0][0]
+    top_overlap = max(value for value, _ in raw_overlaps)
+    for overlap, row in raw_overlaps:
+        base = min(1.0, overlap / max(top_overlap, 1))
+        scored.append((_apply_quality_boost(base, row), row))
+
+    # Tie-break on quality boost so confirmed/helpful incidents win when scores cap at 1.0.
+    scored.sort(key=lambda item: (item[0], _quality_boost(item[1])), reverse=True)
     return [
         IncidentHistoryMatch(
             incident_id=row.id,
             content=_incident_content(row),
-            score=round(min(1.0, value / max(top_score, 1)), 3),
+            score=score,
             method="keyword",
             symptom=row.symptom,
         )
-        for value, row in scored[:limit]
+        for score, row in scored[:limit]
         if row.id is not None
     ]
 
@@ -111,24 +161,27 @@ def _semantic_incident_matches(
     if not log_vector:
         return []
 
-    scored: list[IncidentHistoryMatch] = []
+    scored: list[tuple[float, SavedIncident]] = []
     for row in rows:
         if row.id is None:
             continue
-        score = _cosine_similarity(log_vector, _embed_text(_incident_embed_text(row)))
+        raw_score = _cosine_similarity(log_vector, _cached_incident_embed(row))
+        score = _apply_quality_boost(raw_score, row)
         if score >= RETRIEVAL_MIN_SCORE:
-            scored.append(
-                IncidentHistoryMatch(
-                    incident_id=row.id,
-                    content=_incident_content(row),
-                    score=round(score, 3),
-                    method="semantic",
-                    symptom=row.symptom,
-                )
-            )
+            scored.append((score, row))
 
-    scored.sort(key=lambda item: item.score, reverse=True)
-    return scored[:limit]
+    scored.sort(key=lambda item: (item[0], _quality_boost(item[1])), reverse=True)
+    return [
+        IncidentHistoryMatch(
+            incident_id=row.id,
+            content=_incident_content(row),
+            score=score,
+            method="semantic",
+            symptom=row.symptom,
+        )
+        for score, row in scored[:limit]
+        if row.id is not None
+    ]
 
 
 def dedupe_incident_history_matches(

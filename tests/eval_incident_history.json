@@ -1,0 +1,25 @@
+[
+  {
+    "id": "redis-localhost",
+    "log": "CrashLoopBackOff connection refused localhost:6379 redis cache unreachable pod api",
+    "expect_symptom": "Redis unreachable confirmed",
+    "expect_method": "keyword",
+    "min_score": 0.7,
+    "prefer_resolved": true
+  },
+  {
+    "id": "terraform-state-lock",
+    "log": "Error: Error acquiring the state lock terraform dynamodb",
+    "expect_symptom": "State lock",
+    "expect_method": "keyword",
+    "min_score": 0.5
+  },
+  {
+    "id": "prefer-confirmed-resolution",
+    "log": "CrashLoopBackOff redis connection refused localhost:6379 cache",
+    "expect_symptom": "Redis unreachable confirmed",
+    "expect_method": "keyword",
+    "min_score": 0.7,
+    "prefer_resolved": true
+  }
+]
