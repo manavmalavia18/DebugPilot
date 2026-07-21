@@ -11,7 +11,7 @@ redis:
       memory: 128Mi
 
 api:
-  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:63df42c4fd67ab38ffac43f1bfab0cd5fd7a6111
+  image: 565273632019.dkr.ecr.us-east-1.amazonaws.com/debugpilot-api:e8338ded2b50ded190283b245bf21a132c2f666d
   replicas: 1
   hpa:
     enabled: true
