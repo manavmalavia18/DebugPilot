@@ -27,6 +27,7 @@ export default function App() {
   const [uploadId, setUploadId] = useState(null)
   const [uploadFilename, setUploadFilename] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [saveToHistory, setSaveToHistory] = useState(true)
 
   const loadAuth = useCallback(async ({ background = false } = {}) => {
     try {
@@ -112,7 +113,7 @@ export default function App() {
       const payload = {
         log_text: logText,
         source_hint: sourceHint || null,
-        save: true,
+        save: saveToHistory,
       }
       if (uploadId) payload.upload_id = uploadId
       const res = await api.post("/analyze", payload)
@@ -267,6 +268,8 @@ export default function App() {
                   error={error}
                   result={result}
                   incidentId={incidentId}
+                  saveToHistory={saveToHistory}
+                  setSaveToHistory={setSaveToHistory}
                   onAnalyze={analyze}
                   onLoadPreset={loadPreset}
                   onUploadFile={uploadLogFile}

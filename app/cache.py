@@ -6,7 +6,7 @@ from typing import Any, Optional
 import redis
 
 TTL_SECONDS = int(os.getenv("REDIS_CACHE_TTL_SECONDS", "604800"))
-CACHE_VERSION = os.getenv("ANALYSIS_CACHE_VERSION", "3")
+CACHE_VERSION = os.getenv("ANALYSIS_CACHE_VERSION", "4")
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 KEY_PREFIX = "debugpilot:analysis"
 
@@ -33,11 +33,26 @@ def get_redis() -> Optional[redis.Redis]:
     return _redis
 
 
-def cache_key(log_text: str, source_hint: Optional[str], user_id: Optional[int] = None) -> str:
+def history_fingerprint(incident_history_context: str = "") -> str:
+    """Stable short hash of history context so cache misses when past incidents change."""
+    text = incident_history_context.strip()
+    if not text:
+        return ""
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def cache_key(
+    log_text: str,
+    source_hint: Optional[str],
+    user_id: Optional[int] = None,
+    *,
+    history_fingerprint: str = "",
+) -> str:
     normalized = " ".join(log_text.strip().split())
     hint = source_hint or ""
     user_part = str(user_id) if user_id is not None else ""
-    payload = f"{CACHE_VERSION}\n{MODEL}\n{hint}\n{user_part}\n{normalized}"
+    history_part = history_fingerprint or ""
+    payload = f"{CACHE_VERSION}\n{MODEL}\n{hint}\n{user_part}\n{history_part}\n{normalized}"
     digest = hashlib.sha256(payload.encode()).hexdigest()
     return f"{KEY_PREFIX}:{digest}"
 

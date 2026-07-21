@@ -36,6 +36,13 @@ def _ensure_saved_incident_columns() -> None:
         return
     columns = {column["name"] for column in inspector.get_columns("savedincident")}
     statements: list[str] = []
+    # Older local SQLite DBs predate multi-user / upload linkage.
+    if "user_id" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN user_id INTEGER DEFAULT 1")
+    if "upload_id" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN upload_id INTEGER")
+    if "source_filename" not in columns:
+        statements.append("ALTER TABLE savedincident ADD COLUMN source_filename VARCHAR")
     if "resolution" not in columns:
         statements.append("ALTER TABLE savedincident ADD COLUMN resolution VARCHAR(2000)")
     if "feedback" not in columns:

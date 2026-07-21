@@ -3,12 +3,20 @@ from sqlmodel import SQLModel, Session, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.incident_retrieval import (
+    clear_incident_embed_cache,
     find_similar_saved_incidents,
     format_incident_history_context,
     incidents_for_llm_context,
     incidents_for_ui_display,
 )
 from app.models import SavedIncident, User
+
+
+@pytest.fixture(autouse=True)
+def _clear_embed_cache():
+    clear_incident_embed_cache()
+    yield
+    clear_incident_embed_cache()
 
 
 @pytest.fixture
@@ -184,3 +192,35 @@ def test_format_incident_history_context_includes_past_fix():
     )
     assert "Past incident #7" in text
     assert "use service DNS" in text
+
+
+def test_confirmed_resolution_ranks_above_similar_incident(session, monkeypatch):
+    """Incidents with a confirmed fix should outrank otherwise-equal keyword matches."""
+    monkeypatch.setenv("SEMANTIC_RAG_DISABLED", "1")
+    db, user_id = session
+
+    # Duplicate-ish redis incident without resolution (id=1 already exists).
+    db.add(
+        SavedIncident(
+            user_id=user_id,
+            log_text=(
+                "CrashLoopBackOff redis connection refused localhost:6379 "
+                "cache pod api duplicate"
+            ),
+            category="kubernetes",
+            symptom="Redis unreachable again",
+            root_cause="App uses localhost instead of redis service",
+            likely_fix="Set REDIS_URL to redis://redis:6379",
+            confidence="high",
+            response_json="{}",
+            resolution="Switched REDIS_URL to redis://redis:6379/0 — fixed CrashLoop",
+            feedback=1,
+        )
+    )
+    db.commit()
+
+    log = "CrashLoopBackOff connection refused localhost:6379 redis cache unreachable"
+    matches = find_similar_saved_incidents(db, user_id, log, limit=2)
+    assert matches
+    assert matches[0].incident_id == 3
+    assert "Confirmed resolution" in matches[0].content

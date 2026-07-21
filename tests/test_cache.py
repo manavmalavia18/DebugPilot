@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from app.analyzer import analyze_log
-from app.cache import cache_key
+from app.cache import cache_key, history_fingerprint
 from app.models import AnalysisResult
 
 
@@ -15,6 +15,19 @@ def test_cache_key_stable_for_same_log():
 
 def test_cache_key_differs_for_different_logs():
     assert cache_key("error a", None) != cache_key("error b", None)
+
+
+def test_cache_key_differs_when_history_context_changes():
+    log = "CrashLoopBackOff redis connection refused"
+    empty = cache_key(log, "kubernetes", history_fingerprint="")
+    with_history = cache_key(
+        log,
+        "kubernetes",
+        history_fingerprint=history_fingerprint("Past incident #1: use redis service DNS"),
+    )
+    assert empty != with_history
+    assert history_fingerprint("") == ""
+    assert history_fingerprint("Past incident #1") != history_fingerprint("Past incident #2")
 
 
 @patch("app.analyzer.analyze_with_claude")
@@ -57,6 +70,58 @@ def test_analyze_log_uses_redis_cache(mock_get_redis, mock_claude):
     assert first_cached is False
     assert second_cached is True
     mock_claude.assert_called_once()
+
+
+@patch("app.analyzer.analyze_with_claude")
+@patch("app.cache.get_redis")
+def test_analyze_log_cache_misses_when_history_context_added(mock_get_redis, mock_claude):
+    """Same log with new past-incident context must not reuse the empty-history cache."""
+    stored = {}
+    mock_client = MagicMock()
+    mock_client.get.side_effect = lambda key: stored.get(key)
+    mock_client.setex.side_effect = lambda key, ttl, value: stored.__setitem__(key, value)
+    mock_get_redis.return_value = mock_client
+
+    mock_claude.side_effect = [
+        {
+            "category": "kubernetes",
+            "symptom": "Redis down",
+            "what_failed": "pod",
+            "root_cause": "wrong host",
+            "confidence": "high",
+            "debug_commands": [],
+            "likely_fix": "fix REDIS_HOST",
+            "prevention": [],
+            "warnings": [],
+            "similar_incidents": [],
+        },
+        {
+            "category": "kubernetes",
+            "symptom": "Redis down (from history)",
+            "what_failed": "pod",
+            "root_cause": "localhost REDIS_URL",
+            "confidence": "high",
+            "debug_commands": [],
+            "likely_fix": "Use redis service DNS",
+            "prevention": [],
+            "warnings": [],
+            "similar_incidents": [],
+        },
+    ]
+
+    log = "redis connection refused localhost:6379 history-cache-test"
+    first, first_cached = analyze_log(log, "kubernetes", incident_history_context="")
+    second, second_cached = analyze_log(
+        log,
+        "kubernetes",
+        incident_history_context="Past incident #1:\nConfirmed resolution: use redis DNS",
+    )
+
+    assert first_cached is False
+    assert second_cached is False
+    assert second.symptom == "Redis down (from history)"
+    assert mock_claude.call_count == 2
+    assert "Past incident #1" in mock_claude.call_args_list[1].kwargs["incident_history_context"]
 
 
 @patch("app.cache.get_redis", return_value=None)
